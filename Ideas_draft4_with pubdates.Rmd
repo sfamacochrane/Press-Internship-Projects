@@ -1,0 +1,638 @@
+---
+title: "Ideas - Updated to Control for Post Date"
+author: "Sally Cochrane"
+date: "8/22/2021"
+output:
+  pdf_document: default
+  html_document: default
+header-includes: \usepackage{float} \floatplacement{figure}{h}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+```{r libraries, include = FALSE}
+library(stringr)
+library(dplyr)
+library(httr)
+library(rvest)
+library(ggplot2)
+library(kableExtra)
+library(xtable)
+options(xtable.comment = FALSE)
+```
+
+
+```{r import-data, include=FALSE, eval = FALSE}
+ideas1 <- readxl::read_excel("Site-content-Ideas-June12020-June282021-no-dates.xlsx", sheet = "Dataset1") %>%
+    janitor::clean_names() %>% 
+    rename(pages = page_path_level_2)
+
+```
+
+```{r new-pages, eval = FALSE, include = FALSE}
+# to better scrape urls from google analytics rows, 
+# remove variations after ? in the url. 
+# also remove text descriptions in entries that have text descriptions following URL. 
+# save cleaned entry as "new_pages" column. 
+
+new_pages <- c()
+for(page in ideas1$pages){
+    if (str_detect(page, pattern = "\\?") == TRUE) {
+        new_page <- str_extract(page, pattern = "[^\\?]+")
+        new_pages <- append(new_pages, new_page)
+    } else {
+        new_page <- str_extract(page, pattern = "[^\\s]+")
+        new_pages <- append(new_pages, new_page)
+    }
+}
+
+ideas1$new_pages <- new_pages
+
+ideas1 <- ideas1 %>% select(pages, new_pages, pageviews, unique_pageviews, avg_time_on_page, bounce_rate, percent_exit)
+
+# Save new file to manually fix new_pages to search better: 
+openxlsx::write.xlsx(ideas1, "edited_ideas_no_dates.xlsx")
+```
+
+```{r cleaning-ideas-2, include = FALSE, eval = FALSE}
+# Read in manually edited excel: 
+ideas2 <- readxl::read_excel("edited_ideas_no_dates.xlsx")
+```
+
+```{r scraping-1, include = FALSE, eval = FALSE}
+
+# get all URL's from the new_pages column by making an address out of it: 
+
+url_list <- c()
+for(page in ideas2$new_pages){
+    url_page <- str_c("https://press.princeton.edu/ideas", page)
+    url_list <- append(url_list, url_page)
+}
+
+# divide url list into smaller chunks: 
+url_list1 <- url_list[1:301]
+url_list2 <- url_list[302:603]
+url_list3 <- url_list[604:904] 
+
+# url_list3A <- url_list[603:653]
+# url_list3B <- url_list[654:705]
+# url_list3C <- url_list[706:757]
+# url_list3D <- url_list[758:809]
+# url_list3E <- url_list[810:855]
+# url_list3F <- url_list[856:904]
+
+url_list4 <- url_list[905:1206]
+url_list5 <- url_list[1207:1508]
+url_list6 <- url_list[1509:1805]
+
+# Get content from all URL's:
+
+text_list1 <- c()
+for(url in url_list1){
+    response <- GET(url)
+    response_content <- content(response)
+    text <- response_content %>% 
+        html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+        html_text()
+    text_list1 <- append(text_list1, text)
+}
+
+
+text_list2 <- c()
+for(url in url_list2){
+    response <- GET(url)
+    response_content <- content(response)
+    text <- response_content %>% 
+        html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+        html_text()
+    text_list2 <- append(text_list2, text)
+}
+
+text_list3 <- c()
+for(url in url_list3){
+    response <- GET(url)
+    response_content <- content(response)
+    text <- response_content %>% 
+        html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+        html_text()
+    text_list3 <- append(text_list3, text)
+}
+
+# text_list3A <- c()
+# for(url in url_list3A){
+#     response <- GET(url)
+#     response_content <- content(response)
+#     text <- response_content %>% 
+#         html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+#         html_text()
+#     text_list3A <- append(text_list3A, text)
+# }
+# 
+# text_list3B <- c()
+# for(url in url_list3B){
+#     response <- GET(url)
+#     response_content <- content(response)
+#     text <- response_content %>% 
+#         html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+#         html_text()
+#     text_list3B <- append(text_list3B, text)
+# }
+# 
+# text_list3C <- c()
+# for(url in url_list3C){
+#     response <- GET(url)
+#     response_content <- content(response)
+#     text <- response_content %>% 
+#         html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+#         html_text()
+#     text_listC <- append(text_list3C, text)
+# }
+# 
+# text_list3D <- c()
+# for(url in url_list3D){
+#     response <- GET(url)
+#     response_content <- content(response)
+#     text <- response_content %>% 
+#         html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+#         html_text()
+#     text_listD <- append(text_list3D, text)
+# }
+# 
+# text_list3E <- c()
+# for(url in url_list3E){
+#     response <- GET(url)
+#     response_content <- content(response)
+#     text <- response_content %>% 
+#         html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+#         html_text()
+#     text_listE <- append(text_list3E, text)
+# }
+# 
+# text_list3F <- c()
+# for(url in url_list3F){
+#     response <- GET(url)
+#     response_content <- content(response)
+#     text <- response_content %>% 
+#         html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+#         html_text()
+#     text_listF <- append(text_list3F, text)
+# }
+
+
+text_list4 <- c()
+for(url in url_list4){
+    response <- GET(url)
+    response_content <- content(response)
+    text <- response_content %>% 
+        html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+        html_text()
+    text_list4 <- append(text_list4, text)
+}
+
+text_list5 <- c()
+for(url in url_list5){
+    response <- GET(url)
+    response_content <- content(response)
+    text <- response_content %>% 
+        html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+        html_text()
+    text_list5 <- append(text_list5, text)
+}
+
+text_list6 <- c()
+for(url in url_list6){
+    response <- GET(url)
+    response_content <- content(response)
+    text <- response_content %>% 
+        html_node(xpath = '//div[@class="o-article__subjects"]/a') %>% 
+        html_text()
+    text_list6 <- append(text_list6, text)
+}
+
+# combine scraped text together into one list: 
+text_list <- append(text_list1, text_list2)
+text_list <- append(text_list, text_list3)
+text_list <- append(text_list, text_list4)
+text_list <- append(text_list, text_list5)
+text_list <- append(text_list, text_list6)
+
+# add list to dataframe ideas2:
+
+ideas2$type <- text_list
+
+ideas2 <- ideas2 %>% select(pages, new_pages, type, pageviews, unique_pageviews, avg_time_on_page, bounce_rate, percent_exit)
+
+# Find categories that are un- or mis-categorized: 
+
+ideas2 <- ideas2 %>% arrange(new_pages, type)
+
+```
+
+```{r save-manually-edited, include = FALSE, eval = FALSE}
+# Save as excel to manually edit types: 
+openxlsx::write.xlsx(ideas2, "edited-ideas-no-dates-2.xlsx")
+```
+
+```{r clean-ideas-2, include = FALSE}
+# read in ideas with scraped and manually entered types: 
+ideas <- readxl::read_excel("edited-ideas-no-dates-3.xlsx")
+
+# Calculate variables by combining the multiple entries that are the same: 
+
+ideas_full <- ideas %>% group_by(new_pages) %>% # group repeats
+    mutate(sum_pageviews = sum(pageviews, na.rm = TRUE), # total pageviews
+           sum_unique = sum(unique_pageviews, na.rm = TRUE), 
+           
+           total_time = avg_time_on_page * pageviews, 
+           sum_total_time = sum(total_time, na.rm = TRUE), 
+           total_avg_time = sum_total_time / sum_pageviews, # average time on page
+          
+           total_bounce = bounce_rate * pageviews, 
+           sum_total_bounce = sum(total_bounce, na.rm = TRUE), 
+           total_bounce_rate = sum_total_bounce / sum_pageviews, # bounce rate
+           
+           total_exit = percent_exit * pageviews, 
+           sum_total_exit = sum(total_exit, na.rm = TRUE), 
+           total_percent_exit = sum_total_exit /sum_pageviews) %>% # percent exit
+    select(pages, new_pages, type, pageviews, sum_pageviews, unique_pageviews, sum_unique,
+           avg_time_on_page, total_avg_time, bounce_rate, total_bounce_rate, 
+           percent_exit, total_percent_exit)
+
+```
+
+```{r just-essays-df, include = FALSE, eval = FALSE}
+ideas_essays <- ideas_full %>% filter(type == "Essays")
+
+```
+
+```{r scrape-essays-for-new-type, include = FALSE, eval = FALSE}
+# essays_test_url <- c("https://press.princeton.edu/ideas/a-look-inside-a-world-divided", "https://press.princeton.edu/ideas/a-brush-with-nature-alexander-von-humboldt-and-frederic-church", "https://press.princeton.edu/ideas/a-celebration-of-mathematics-editor-vickie-kearn", "https://press.princeton.edu/ideas/a-james-mcadams-on-vanguard-of-the-revolution", "https://press.princeton.edu/ideas/a-leadership-class-from-the-ancient-world", "https://press.princeton.edu/ideas/a-long-afternoon-opposition-enmity-and-egyptian-hieroglyphs") 
+    # essay_test_url = excerpt, excerpt, interview, interview, essay, essay
+
+# create URL list from ideas_essays: 
+list_essays_urls <- c()
+for(page in ideas_essays$new_pages){
+    url_page <- str_c("https://press.princeton.edu/ideas", page)
+    list_essays_urls <- append(list_essays_urls, url_page)
+}
+
+# Scrape URLs (essays only) for interview, excerpt, or just an essay: 
+new_type <- c()
+for(url in list_essays_urls){
+    response <- GET(url)
+    content <- content(response)
+    text <- content %>% html_text(trim = TRUE)
+    bold_count <- content %>% 
+        html_nodes(xpath = '//strong')
+    if(str_detect(tolower(text), pattern = "excerpt") == TRUE) {
+        new_type <- append(new_type, "excerpt")
+    } 
+    else if(length(bold_count) >= 4) {
+        new_type <- append(new_type, "interview")
+    } else {
+        new_type <- append(new_type, "essay")
+    }
+}
+
+ideas_essays$new_type <- new_type
+
+just_essays <- ideas_essays %>% select(new_pages, new_type)
+    
+
+# Save as new file: 
+
+openxlsx::write.xlsx(ideas_essays, "ideas_essays.xlsx")
+```
+
+```{r add-essay-content, include = FALSE, eval = FALSE}
+ 
+ideas_with_content <- full_join(ideas_full, just_essays, by = "new_pages")
+
+ideas_with_content <- ideas_with_content %>% mutate(type = as.character(type))
+
+ideas_with_content <- ideas_with_content %>% mutate(
+    new_type = 
+    case_when(
+        is.na(new_type) ~ type, 
+        !is.na(new_type) ~ new_type
+    )
+)
+ 
+# Save file with full content (essays broken down into interview and excerpt): 
+openxlsx::write.xlsx(ideas_with_content, "ideas_with_content.xlsx")
+```
+
+
+
+
+
+
+
+```{r read-final-ideas-df-with-content, include = FALSE}
+
+ideas_final <- readxl::read_excel("ideas_with_content.xlsx")
+
+# combine duplicate rows: 
+
+ideas_final_small <- ideas_final %>% 
+    distinct(new_pages, new_type, sum_pageviews, sum_unique, total_avg_time, total_bounce_rate, total_percent_exit) %>% 
+    mutate(new_type = as.factor(new_type), 
+           log_pageviews = log(sum_pageviews))
+
+# remove new_type = NA: 
+ideas_final_small <- ideas_final_small %>% filter(!is.na(new_type))
+
+# add log bounce rate, log avg time on page, log percent exit:
+
+ideas_final_small <- ideas_final_small %>% 
+    mutate(log_bounce_rate = 
+               case_when(total_bounce_rate > 0 ~ log(total_bounce_rate), 
+                         total_bounce_rate == 0 ~ 0), 
+           log_avg_time = 
+               case_when(total_avg_time > 0 ~ log(total_avg_time), 
+                         total_avg_time == 0 ~ 0), 
+           log_percent_exit = 
+               case_when(total_percent_exit > 0 ~ log(total_percent_exit), 
+                         total_percent_exit == 0 ~ 0)
+    )
+
+# Save without duplicate rows: 
+openxlsx::write.xlsx(ideas_final_small, "Ideas_no_duplicates_with_content.xlsx")
+
+```
+
+
+```{r scrape-for-pubdate, include = FALSE, eval = FALSE}
+
+ideas_final_small <- readxl::read_excel("Ideas_no_duplicates_with_content.xlsx")
+
+# make urls to scrape for blog post date:
+
+urls_2 <- c()
+for(page in ideas_final_small$new_pages){
+    url_page <- str_c("https://press.princeton.edu/ideas", page)
+    urls_2 <- append(urls_2, url_page)
+}
+
+# Test scraping: 
+# response <- GET("https://press.princeton.edu/ideas/a-james-mcadams-on-vanguard-of-the-revolution")
+# content <- content(response)
+# date <- content %>% html_node(xpath = '//*[@id="content"]/article/header/div/div[2]/div/p[2]/time') %>% html_text()
+# date <- str_trim(date)
+# date <- as.Date(date, "%B %d, %Y")
+
+
+# Scrape URLS for blog post date"
+post_date <- c()
+
+for(url in urls_2){
+    response <- GET(url)
+    content <- content(response)
+    date <- content %>% 
+        html_node(xpath = '//time') %>% 
+        html_text()
+    date <- str_trim(date)
+    date <- as.Date(date, "%B %d, %Y")
+    post_date <- append(post_date, date)
+}
+
+post_date
+
+# add post_date column to df, "ideas_final_small":
+ideas_final_small$post_date <- post_date
+
+# calculate pageviews, unique views, avg time, bounce rate, exit rate, accounting for the amount of time the Ideas post was live using the post date: 
+
+ideas_final <- ideas_final_small %>% mutate(
+    time_live = as.Date("2021-06-28") - post_date) 
+
+
+## SAVE df with content, post_date, and time live: 
+
+openxlsx::write.xlsx(ideas_final, "Ideas_with_content_postdate_timelive.xlsx")
+```
+
+```{r start-here-with-dates, include = FALSE}
+## START HERE ##
+
+ideas <- readxl::read_excel("Ideas_with_content_postdate_timelive.xlsx")
+
+# calculate pageviews/time live, etc, to account for how long the Post has been up: 
+
+ideas <- ideas %>% mutate(
+    time_live = as.numeric(time_live),
+    pageviews_per_day = sum_pageviews / time_live, 
+    unique_per_day = sum_unique / time_live, 
+    avg_time_per_day = total_avg_time / time_live, 
+    bounce_rate_per_day = total_bounce_rate / time_live, 
+    percent_exit_per_day = total_percent_exit / time_live) %>% 
+    select(new_pages, new_type, post_date, time_live, sum_pageviews, pageviews_per_day, 
+           sum_unique, unique_per_day, total_avg_time, avg_time_per_day, 
+           total_bounce_rate, bounce_rate_per_day, total_percent_exit, 
+           percent_exit_per_day)
+
+```
+
+
+### Procedure: 
+
+* Data came from Google analytics: Date range June 1 2020 - June 28 2021. Site content > content drilldown > Ideas. (Note: for some reason, this procedure returned 3 Ideas posts that were published online after June 28, 2021 (podcast-we are not born submissive; on self interest; and who was euclid. I'm not sure why this happened).
+
+* In google analytics, there are multiple rows of data for what appear to be the same Ideas post. I combined the data from these rows as if it was one row of data, because I think it was a mistake that they were separated on google analytics. If this is wrong, let me know and I can change it. 
+
+* I made URL's from all the google analytics' "Ideas" pages rows, and used the URL's to scrape the PUP website for the content tag. 
+
+* To distinguish interviews, excerpts, and essays: I scraped the PUP website for alternating bold-face text to tag interviews, and I scraped for the word "excerpt" to tag excerpts.  
+ 
+* I removed rows that didn't lead to an Ideas URL (mostly strings of letters and numbers), or that went to the more general search landing pages ("podcasts", "videos", etc.). 
+
+* I scraped for the publication date of the post on the Ideas page, and limited the anaylsis to Ideas posts that were published between June 1 2020 and June 28 2020 (same as the google analytics data). While some older posts got views during this time, they only got a small number of views, probably due to their age. It seemed to be a fairer comparison to look at posts published within the last year. 
+
+* I took into account the time the post had been "live" using that time as a fixed effect in a model for the pageviews, bounce rate, etc. 
+
+
+### How Ideas Post date relates to Pageviews: 
+
+This graph shows that more recently published Ideas posts have fewer pageviews, probably because they haven't been up for as long, so we need to adjust for the "time live" to compare pageviews, etc., between posts. 
+
+```{r is-pageviews-related-to-pubdate, echo = FALSE}
+
+ideas_2 <- ideas %>% 
+    filter(post_date >= "2020-06-01" & post_date <= "2021-06-28") 
+
+ideas_2 %>% 
+    ggplot(aes(x = post_date, y = log(sum_pageviews)))+
+    geom_point()+
+    geom_smooth(method = "lm", se = FALSE) + 
+    labs(title = "(Log) Pageviews by Ideas Post Date", 
+         x = "Post Date", 
+         y = "(Log) Pageviews")
+```
+
+``` {r stats, include = FALSE}
+summary(lm(I(log(sum_pageviews)) ~ post_date, data = ideas_2))
+```
+
+### Plots of Performance by Content Type: 
+
+* Controlling for the amount of time the Ideas post has been "live" (published), Aeon Magazine posts and Book Club Picks posts have a higher number of pageviews and unique pageviews than the other types of content. Reading lists have a slightly higher number of pageviews than the other types of content minus Aeon and Book Club Picks (i.e., essays, interviews, excerpts, podcasts, etc). Podcasts have a slightly lower number of pageviews than the other types of content. 
+
+* However, there is only one Aeon Mazagine post in this dataset, so take this with a grain of salt. There are also a lot of outliers for essays, so I think that group might warrant further exploration (i.e., what _kinds_ of essays get more traffic?). 
+
+
+```{r make-logs, include = FALSE}
+
+ideas_3 <- ideas_2 %>% mutate(
+    new_type = as.factor(new_type),
+    log_pageviews = log(sum_pageviews), 
+    log_unique = log(sum_unique), 
+    log_bounce = case_when(
+        total_bounce_rate > 0 ~ log(total_bounce_rate), 
+        total_bounce_rate == 0 ~ 0),
+    log_percent_exit = log(total_percent_exit), 
+    log_avg_time = case_when(
+        total_avg_time > 0 ~ log(total_avg_time), 
+        total_avg_time == 0 ~ 0))
+
+# make essays the baseline category to see if excerpts, interviews, etc are different.
+
+ideas_4 <- ideas_3 %>% mutate(
+    new_type = forcats::fct_relevel(new_type, c("essay")))
+
+```
+
+```{r pageviews-plot, echo = FALSE}
+
+lm1 <- lm(formula = log_pageviews ~ new_type + time_live,
+            data = ideas_3)
+
+lm1_relevel <- lm(formula = log_pageviews ~ new_type + time_live, 
+                  data = ideas_4)
+
+# Plot it with data: 
+sjPlot::plot_model(lm1, 
+                   type = "pred", 
+                   terms = c("new_type"),
+                   show.data = TRUE)+
+    labs(title = "Log Pageviews by Content Type, \nwith bars for prediction interval",
+         x = "Content Type", 
+         y = "Log Pageviews")+
+    theme(axis.text.x=element_text(angle = -25, vjust = 0, hjust = 0))
+```
+
+```{r pageviews-table, include=FALSE, results = "asis"}
+stargazer::stargazer(lm1_relevel, 
+                     title = "Predicted Log Pageviews by Content Type Controlling for  Time Live",
+                     omit.stat = c("f", "ser"),
+                     type = "latex", 
+                     header = FALSE, 
+                     table.placement="H")
+```
+
+
+```{r unique, echo = FALSE}
+lm2 <- lm(formula = log_unique ~ new_type + time_live,
+            data = ideas_3)
+lm2_relevel <- lm(formula = log_unique ~ new_type + time_live,
+            data = ideas_4)
+
+# Plot it with data: 
+sjPlot::plot_model(lm2, 
+                   type = "pred", 
+                   terms = c("new_type"),
+                   show.data = TRUE)+
+    labs(title = "Log Unique Pageviews by Content Type, \nwith bars for prediction interval",
+         x = "Content Type", 
+         y = "Log Unique Pageviews")+
+    theme(axis.text.x=element_text(angle = -25, vjust = 0, hjust = 0))
+```
+
+```{r unique-table, include=FALSE, results = "asis"}
+stargazer::stargazer(lm2_relevel, 
+                     title = "Predicted Log Unique Pageviews by Content Type Controlling for Time Live",
+                     omit.stat = c("f", "ser"),
+                     type = "latex", 
+                     header = FALSE, 
+                     table.placement="H")
+```
+
+
+\newpage  
+* Controlling for the amount of time the Ideas post has been live, all content types have approximately the same bounce rates, except for Book Club Picks which have slightly higher bounce rates.   
+
+```{r full-content-bounce-rate-plot, echo = FALSE}
+lm3 <- lm(formula = total_bounce_rate ~ new_type + time_live, 
+          data = ideas_3)
+lm3_log <- lm(formula = log_bounce ~ new_type + time_live, 
+          data = ideas_3)
+lm3_relevel <- lm(formula = total_bounce_rate ~ new_type + time_live, 
+          data = ideas_4)
+
+sjPlot::plot_model(lm3, 
+                   type = "pred", 
+                   terms = c("new_type"),
+                   show.data = TRUE)+
+    labs(title = "Bounce Rate by Content Type, \nwith bars for prediction interval",
+         x = "Content Type", 
+         y = "Bounce Rate")+
+    theme(axis.text.x=element_text(angle = -25, vjust = 0, hjust = 0))
+```
+  
+\newpage 
+
+* Book Club Picks had the lowest average time on page. Reading Lists, Videos, and By Design had similarly low average time on page to Book Club Picks. Aeon Magazine, essays, excerpts, and interviews had the most time on the page, followed by Podcasts and Audio. 
+
+
+```{r full-content-time-plot, echo = FALSE}
+lm4 <- lm(formula = log_avg_time ~ new_type + time_live, 
+          data = ideas_3)
+
+ideas_5 <- ideas_4 %>% mutate(
+    new_type = forcats::fct_relevel(new_type, c("Book Club Picks")))
+    
+lm4_relevel <- lm(formula = log_avg_time ~ new_type + time_live, 
+          data = ideas_5)
+
+sjPlot::plot_model(lm4, 
+                   type = "pred", 
+                   terms = c("new_type"),
+                   show.data = TRUE)+
+    labs(title = "(Log) Average Time on Page by Content Type, \nwith bars for prediction interval",
+         x = "Content Type", 
+         y = "(Log) Avg Time on Page")+
+    theme(axis.text.x=element_text(angle = -25, vjust = 0, hjust = 0))
+                            
+```
+
+```{r stats-bounce, include = FALSE}
+summary(lm4_relevel)
+```
+\newpage 
+
+* Aeon Magazine posts, essays, excerpts, and interviews also have the highest percent exit rates, meaning people leave the PUP website after visiting those pages. Book Club Picks, Reading Lists, Podcasts, and By Design have the lowest percent exit rate, meaning people stay on the PUP website after viewing them more often: 
+
+```{r full-content-percent-exit-plot, echo = FALSE}
+lm5 <- lm(formula = total_percent_exit ~ new_type + time_live, 
+          data = ideas_3)
+lm5_relevel <- lm(formula = total_percent_exit ~ new_type + time_live, 
+          data = ideas_4)
+
+sjPlot::plot_model(lm5, 
+                   type = "pred", 
+                   terms = c("new_type"),
+                   show.data = TRUE)+
+    labs(title = "Percent Exit by Content Type, \nwith bars for prediction interval",
+         x = "Content Type", 
+         y = "Percent Exit")+
+    theme(axis.text.x=element_text(angle = -25, vjust = 0, hjust = 0))
+```
+
+```{r stats-percent-exit, include = FALSE}
+summary(lm5_relevel)
+```
+
+
+\newpage
+
