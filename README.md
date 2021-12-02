@@ -7,4 +7,4 @@ Projects done for the Princeton University Press Digital Marketing Team, Summer 
 
 **Ideas**: This project compared several Google Analytics metrics for the Press's blog, "Ideas", based on the type of post. I scraped the Press website to determine whether each blog post was an essay, audio file, Book Club pick, exerpt, interview, video, or reading list, and then compared the boucne rates, pageviews, average time on page, and exit rates between the different blog post types.  
 
-**Asset Types, Click-Through-Rates, and Cost-Per-Click**: This project compared these metrics for Facebook and Twitter ads, and compared the performance of ads with different asset types (links, images, videos). I also compared the perfomrance of ads based on the genre of the book (STEM, Humanities, Nature, and General Interest books). 
+**Asset Types and Ad managers**: This project compared cost-per-click and click-through-rate for Facebook and Twitter ads, and compared the performance of ads with different asset types (links, images, videos). I also compared the perfomrance of ads based on the genre of the book (STEM, Humanities, Nature, and General Interest books). 
