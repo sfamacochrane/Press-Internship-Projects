@@ -1,0 +1,1234 @@
+---
+title: "Sales and Digital Advertising"
+author: "Sally Cochrane"
+date: "7/20/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r libraries, include = FALSE}
+library(dplyr)
+library(stringr)
+library(xtable)
+options(xtable.comment = FALSE)
+library(kableExtra)
+library(ggplot2)
+library(httr)
+library(rvest)
+```
+
+```{r read-data, include=FALSE, eval = FALSE}
+sales <- readxl::read_excel("data.xlsx") %>% janitor::clean_names()
+
+fb <- readxl::read_excel("facebook-ad-manager.xlsx") %>% janitor::clean_names()
+
+tw <- readxl::read_excel("twitter-ad-manager.xlsx") %>% janitor::clean_names()
+
+glimpse(sales)
+glimpse(fb)
+glimpse(tw)
+```
+
+```{r clean-data, include = FALSE, eval = FALSE}
+## CLEAN SALES: 
+
+# rename columns: 
+sales <- sales %>% rename(title = cover_title, 
+                 product_type = c_reporting_product_type, 
+                 units = sum_of_net_units)
+
+# sum units from audio, ebook, paperback, hardback, for each title: 
+sales <- sales %>% group_by(title) %>% 
+    mutate(sum_units = sum(units)) %>% 
+    distinct(title, sum_units) %>% 
+    arrange(title)
+
+# save as new excel file to manually fix to match social media data: 
+openxlsx::write.xlsx(sales, "sales.xlsx")
+
+
+
+## CLEAN FACEBOOK AD MANAGER:
+    # Remove "Post: " campaigns
+
+fb <- fb %>% filter(str_detect(campaign_name, pattern = "Post: ") == FALSE)
+
+    # Select only necessary columns and rename them: 
+        # link clicks means clicks on the ad. clicks all means any click, including like, comment, share. 
+
+fb <- fb %>% select(campaign_name, amount_spent_usd, results, impressions, ctr_link_click_through_rate, cost_per_results) %>% 
+    rename(campaign = campaign_name, 
+           amount_spent = amount_spent_usd,
+           results = results, 
+           impressions = impressions,
+           result_rate = ctr_link_click_through_rate, 
+           cost_per_result = cost_per_results)
+    
+    # Mark all rows as coming from facebook: 
+fb <- fb %>% mutate(platform = "facebook")
+
+   
+
+## Clean twitter ad manager data: 
+    # remove "Quick promote" campaigns: 
+
+tw <- tw %>% 
+    filter(str_detect(campaign_name, pattern = "Quick promote") == FALSE)
+
+    # Select only necessary columns: 
+tw <- tw %>% select(campaign_name, spend, results, impressions, result_rate, cost_per_result) %>% 
+    rename(campaign = campaign_name, 
+           amount_spent = spend,
+           results = results, 
+           impressions = impressions,
+           result_rate = result_rate, 
+           cost_per_result = cost_per_result)
+
+    # Mark all rows as coming from twitter: 
+tw <- tw %>% mutate(platform = "twitter")
+
+    # Change types of certain columns and multiply result_rate by 100 to match fb's percents: 
+glimpse(tw)
+
+tw <- tw %>% mutate(
+    result_rate = as.numeric(result_rate))
+tw <- tw %>% mutate(
+    result_rate = result_rate * 100)
+
+
+
+### Combine twitter and facebook ad managers into one df = SOCIAL: 
+social <- rbind(fb, tw)
+
+# Clean campaign names so they match sales data: 
+
+campaign_list <- social %>% pull(campaign)
+
+title_list <- c()
+for(title in campaign_list){
+    if(str_detect(title, pattern = "(?<=[:punct:][:blank:]).*") == TRUE){
+        new_campaign <- str_extract_all(title, pattern = "(?<=[:punct:][:blank:]).*")
+    }else{
+        new_campaign <- title
+    }
+    title_list <- append(title_list, new_campaign)
+}
+
+title_list
+
+title_list_2 <- c()
+for(i in 1:length(title_list)){
+    title <- title_list[[i]]
+    title_list_2 <- append(title_list_2, title)
+}
+
+title_list_2
+
+social$title <- title_list_2
+
+social <- social %>% 
+    select(title, campaign, amount_spent, results, impressions, result_rate, cost_per_result, platform) %>% 
+    arrange(title)
+
+# Save social as excel file to manually change problems: 
+openxlsx::write.xlsx(social, "social.xlsx")
+
+```
+
+```{r cleaning-2, include = FALSE, eval = FALSE}
+# read in manually changed tables
+
+social <- readxl::read_excel("social_edited.xlsx")
+sales <- readxl::read_excel("sales_edited.xlsx")
+
+# Add a column of total units sold, from "sales", to the social df:
+
+sales_social <- full_join(social, sales, by = "title") %>% 
+    select(title, sum_units, platform, amount_spent, results, impressions, result_rate, cost_per_result)
+
+# Save as excel file to look at it and manually change things: 
+
+openxlsx::write.xlsx(sales_social, "sales_social.xlsx")
+```
+
+```{r add-publication-dates, include=FALSE}
+
+### ADD PUBLICATION DATES FROM WEB###
+
+# This is combined social media and sales numbers, but with catalogs, sales, etc. taken out manually: 
+
+ss <- readxl::read_excel("sales_social_edited.xlsx")
+
+# Sent list of titles to python to scrape for URL's.
+
+```
+
+
+### Questions: 
+
+1. For several books with social media ads, there was no sales data. Why might this be? (Example: "Making Motherhood Work"). 
+
+2. I removed "Catalog" ads because I don't know the exact books advertised. Is there a way to figure out which books were in, say, the "Literature social ad", to try to tie the units sold data to that? 
+
+## Summary of Findings: 
+* Books that had a Facebook or Twitter ad run for them sold more units, on average, than books without an ad.  
+    - However, there was no relationship between the ad's performance (click through rate, bounce rate, etc.) and the units sold of the book.    
+    
+* Books that had an Ideas post about them also sold more units than books without an Ideas post.  
+    - However, there was no relationship between the post's google analytics behavior (average time on page, bounce rate, etc.) and the units sold of the book.   
+
+* What might this mean?   
+    - It could mean that all the ads/posts are doing a good job of promoting the books. 
+    - It could also mean that you simply chose good books to promote, that would have done well anyway.  
+
+    
+
+
+```{r final-combined-data, include = FALSE, eval = FALSE}
+
+# This is combined social media and sales numbers, but with catalogs, sales, etc. taken out manually: 
+ss <- readxl::read_excel("sales_social_edited.xlsx")
+
+glimpse(ss)
+
+ss <- ss %>% mutate(
+    platform = as.factor(platform), 
+    result_rate = as.numeric(result_rate)
+)
+
+## for tw, results rate needs to be multiplied by 100 to match fb's reporting:
+ss <- ss %>% group_by(platform) %>% 
+    mutate(result_rate = case_when(
+        platform == "twitter" ~ 100*result_rate, 
+        platform == "facebook" ~ result_rate
+    )
+)
+   
+```
+
+
+```{r find-pub-dates, include=FALSE, eval = FALSE}
+# Divide into books with ads and no ads: 
+
+ss <- ss %>% mutate(had_ad = ifelse(is.na(platform) == TRUE, "no", "yes"))
+
+ss <- ss %>% mutate(
+    platform = as.factor(platform), 
+    had_ad = as.factor(had_ad),
+    log_units = case_when(
+        sum_units <= 0 ~ 0, 
+        sum_units > 0 ~ log(sum_units)
+    ))
+
+ss <- ss %>% mutate(
+    had_ad = forcats::fct_relevel(had_ad, "yes", "no")
+)
+
+## Save final version of ss, no book types, urls, pub dates: 
+
+openxlsx::write.xlsx(ss, "FINAL_ss_NO_types_urls_dates.xlsx")
+
+```
+
+```{r read-ss-with-had-ad, include = FALSE, eval = FALSE}
+ss <- readxl::read_excel("FINAL_ss_NO_types_urls_dates.xlsx")
+```
+
+```{r remove-repeats-for-smaller, include = FALSE, eval = FALSE}
+
+## make a smaller table without platform-individual data: 
+
+ss_small <- ss %>% distinct(title, sum_units, log_units, had_ad)
+
+```
+
+```{r import-full-url-list, include = FALSE, eval = FALSE}
+# Read in full list of urls (from Python scraping), removing last empty cell: 
+
+full_url_list <- scan("full_url_list.txt", sep = ",", what = ",")
+full_url_list <- full_url_list[1:1011]
+
+# Add column of urls to ss_small (no repeats of book titles for diff types): 
+ss_small$url <- full_url_list
+
+# write ss_small to excel to manually add missing URL's: 
+openxlsx::write.xlsx(ss_small, "ss_small.xlsx")
+```
+
+```{r url-lists-for-python, include = FALSE, eval = FALSE}
+
+# making list of url's to feed to python to scrape for publication dates. 
+
+ss_small_filled_in_url <- readxl::read_excel("ss_small_url_filled_in.xlsx")
+
+full_url_filled_in_list <- ss_small_filled_in_url %>% pull(url)
+test_url_list <- full_url_filled_in_list[1:20]
+
+write(test_url_list, "test_url_list.txt")
+write(full_url_filled_in_list, "full_url_filled_in_list.txt")
+```
+
+```{r add-date-column, include = FALSE, eval = FALSE}
+# add column of publication dates to ss_small_filled_in_url: 
+    # read in date list.txt: 
+
+datelist <- scan("datelist.txt", sep = "\n", what = ",")
+
+small_datelist <- datelist[1:10]
+
+# change the datelist to a date format:
+library(lubridate)
+datelist_dates <- format(mdy(datelist), "%Y-%m-%d")
+
+ss_small_filled_in_url$pub_date <- datelist_dates
+```
+
+```{r final-df, include = FALSE, eval= FALSE}
+## Save final smaller df with urls and pub dates: 
+
+# this is the sheet with sales for summed book types, yes/no social media, url, and pub date.
+
+openxlsx::write.xlsx(ss_small_filled_in_url, "FINAL_sales_social_url_pubdate_nobooktypes.xlsx")
+```
+
+
+
+
+```{r start-here-part-1, include = FALSE}
+
+ss_small_final <- readxl::read_excel("FINAL_sales_social_url_pubdate_nobooktypes.xlsx")
+
+# Find comparable books that had/didn't have an ad: 
+ss_small_final %>% filter(had_ad == "yes") %>% arrange(desc(pub_date))
+    
+    # Filter for books in date range of fb/tw analytics (starting 6-31-2020)
+compare <- ss_small_final %>% filter(pub_date >= "2020-06-30" & pub_date <= "2021-07-01")
+
+    # make had_ad a factor and pubdate a date: 
+
+compare <- compare %>% mutate(
+    had_ad = as.factor(had_ad),
+    pub_date = as.Date(pub_date)
+)
+
+compare <- compare %>% 
+    mutate(had_ad = forcats::fct_relevel(had_ad, "yes", "no"))
+```
+
+## 1. Did Books that Had a Facebook or Twitter Ad Sell More Units?
+
+* Procedure: 
+    - This section only considers "display" and "paidsocial" ads on Facebook and Twitter between 6/30/2020 and 7/1/2021. I removed "Posts" and "Quick promote" posts for this analysis.   
+    
+    - In order to be fair in comparing sales for books that did and did not have a social media ad run for them, I selected only books from the sales list that were published between 6/30/2020 and 7/1/2021. The sales data included books published earlier than that, but it wouldn't be fair to compare a book without an ad that was published in 1980 (and so had only a few sales this last year) to a book with an ad that was published this year. I also only used twitter and facebook ad manager data from the same date range as the sales data range (6/30/2020 to 7/1/2021), though I could look further back in time in a future study if we think the google analytics data is reliable for before June 2020.   
+    
+    - Note that many of the books that are labeled as NOT having an ad here DID have a "Post" or a "Quick promote" post about them. I could analyze those books later, if you're interested.  
+    
+    - Units sold combines all book types (paperback, hardback, ebook, audio).
+    
+
+``` {r compare-plot, echo = FALSE}
+
+ggplot(data = compare, aes(x = pub_date, y = sum_units, color = had_ad)) + 
+    geom_smooth(method = lm)+
+    geom_point()+
+    ggrepel::geom_text_repel(data = subset(compare, sum_units >= 7500), aes(label = title), size = 2.5)+
+    labs(title = "Unit Sales for Books With and Without a Social Media Ad", 
+         x = "Publication Date of Book", 
+         y = "Units Sold", 
+         color = "Had an Ad?")
+```
+.
+
+
+* This plot show that **books that had an ad on facebook or twitter at some point (red) had more unit sales than books that never had an ad (blue).** Books with ads sold an average of 2596 units (median 1929), while books without an ad sold an average of 964 units (median 489). It is estimated that **books with an ad had roughly 3.16 times as many units sold** as books without an ad. This difference is likely statistically significant. 
+
+* However, because the books that got a facebook or twitter ad were not chosen at random, I can't say that the ad _caused_ the higher sales. It may be that you chose especially good books to run ads for, and they would have done well on their own anyway.   
+
+We can zoom in on the graph to see more clearly that books with an ad had higher sales on average (red), but that there is considerable overlap in the sales for books with and without an ad:
+
+
+```{r compare-plot-zoomed, echo = FALSE}
+ggplot(data = compare, aes(x = pub_date, y = sum_units, color = had_ad)) + 
+    geom_smooth(method = lm)+
+    geom_point()+
+    ggrepel::geom_text_repel(data = subset(compare, sum_units >= 7500), aes(label = title), size = 2.5)+
+    labs(title = "Zooming In on the Graph Above...\n Sales for Social Ad vs. No Ad", 
+         x = "Publication Date", 
+         y = "Units Sold", 
+         color = "Had an Ad?")+ 
+    ylim(0, 6000)
+```
+
+
+```{r yes-no-ad-table, echo = FALSE, results = "asis"}
+# Summary stats: 
+compare %>% 
+    group_by(had_ad) %>% 
+    rename(`Had Ad?` = had_ad) %>% 
+    summarize(`mean units sold`= mean(sum_units, na.rm = TRUE), 
+              `median units sold` = median(sum_units, na.rm = TRUE),
+              Q1 = quantile(sum_units, 0.25, na.rm = TRUE), 
+              Q3= quantile(sum_units, 0.75, na.rm = TRUE)) %>% 
+    kable(caption = "Statistics for Books With and Without an Ad",
+        booktabs = TRUE, 
+        format   = 'latex') %>% 
+    kable_styling(
+        bootstrap_options = "striped", 
+        latex_options="hold_position",
+        full_width = FALSE)
+```
+
+```{r yes-no-ad-statistics, include = FALSE}
+
+
+# two-sample t-test on the logged units sold: 
+
+ttest_log_units <- t.test(data = compare, 
+                    log_units ~ had_ad, 
+                    var.equal = TRUE)
+
+# calculate the multiplier effect: 
+
+    # Find means of ad and no ad: 
+mean_ad <- mean(compare$log_units[compare$had_ad == "yes"], na.rm = TRUE)
+mean_noad <- mean(compare$log_units[compare$had_ad == "no"], na.rm = TRUE)
+
+    # Find diff in means: 
+mean_diff_units <- mean_ad - mean_noad
+
+    # untransform the difference: 
+multiplier_ad <- exp(mean_diff_units)
+
+    # 95% confidence interval of logged values: 
+ttest_log_units$conf.int
+
+    # confidence interval of multiplier: 
+exp(ttest_log_units$conf.int)
+
+
+## RANK-SUM TEST## 
+
+wilcox.test(log_units ~ had_ad, 
+            conf.int = TRUE, 
+            exact = FALSE, 
+            alternative = "greater", 
+            data = compare)
+
+# Rank all measurements in increasing order: 
+
+rank <- rank(compare$sum_units, ties.method = "average")
+
+# Sum the ranks for all of a particular group. (Sum is the test statistic, T)
+t_ad <- sum(rank[compare$had_ad == "yes"])
+
+# Is this test statistic extreme? 
+    # assume the t-stats (sum of ranks) is normally distributed; build normal dist of t-stats)
+
+avg_units <- mean(rank)
+sd_units <- sd(rank)
+n_ad <- nrow(subset(compare, compare$had_ad == "yes"))
+mean_t <- n_ad * avg_units
+sd_t <- sd_units * sqrt((n_ad^2)/(2*n_ad))
+
+# calculate the Z score and p-value:
+z_ad <- (t_ad - mean_t)/sd_t
+pvalue_ad <- pnorm(-abs(z_ad))
+```
+
+* Notes: 
+    1. You can also see that books which were published more recently have lower sales, in general. This is likely just because they haven't had as long on the market yet.   
+    2. There is considerable overlap between sales numbers for books with and without an ad, so this is not a rule, just a trend.   
+    3. These graphs don't take into account _when_ the social media ad was run.   
+
+**Statistical Tests**:  
+It is estimated that there were 3.16 times more units sold in the group with no social media ads than the group without social media ads. The 95% confidence interval for the multiplicative effect is 2.51 to 3.99 times, which, since it does not straddle zero, suggests the two groups' sales are significantly different.   
+The rank-sum test also indicates that the two groups' units sold are different, with a p-value < 0.001. 
+
+
+## 2. Does the Click-Through-Rate, Bounce Rate, or number of Impressions on Facebook/Twitter Ads Correlate to Sales?  
+
+* No, it doesn't look like there is any relationship between the click through rate (results rate), impressions, or bounce rate and units sold, on either platform.   
+
+
+```{r filter_ss_for_ads, include = FALSE}
+# Filter ss (sales + social data) for books that had a social media ad:
+
+ss_2 <- ss %>% filter(!is.na(platform))
+
+# make results rate a log: 
+
+ss_2 <- ss_2 %>% mutate(
+    result_rate = as.numeric(result_rate))
+
+ss_2 <- ss_2 %>% mutate(
+    log_result_rate = case_when(
+        result_rate > 0 ~ log(result_rate), 
+        result_rate == 0 ~ 0),
+    log_units = case_when(
+        sum_units > 0 ~ log(sum_units), 
+        sum_units == 0 ~ 0)
+)
+
+ss_2_dates <- left_join(ss_2, ss_small_final, by = "title") %>% 
+    filter(pub_date >= "2020-06-30" & pub_date <= "2021-07-01") %>% 
+    select(title, sum_units.x, platform, amount_spent, results, impressions, result_rate, cost_per_result, log_result_rate, log_units.x, had_ad, pub_date) %>% 
+    rename(sum_units = sum_units.x, 
+           log_units = log_units.x)
+
+```
+
+```{r problem-2-plot1, echo = FALSE, out.width = "50%"}
+
+ss_2_dates %>% 
+    ggplot(aes(x = result_rate, y = sum_units, color = platform))+
+    geom_point()+
+    labs(title = "Units Sold vs. Results Rate", 
+         x = "Results Rate", 
+         y = "Units Sold")
+
+ss_2_dates %>% 
+    ggplot(aes(x = result_rate, y = sum_units, color = platform))+
+    geom_point()+
+    xlim(0, 10)+
+    ylim(0, 7000)+
+    labs(title = "Zooming In on Results Rate...", 
+         x = "Results Rate", 
+         y = "Units Sold")
+```
+
+```{r stat-test-results-rate-units, include = FALSE}
+summary(lm(log_units ~ log_result_rate, data = ss_2_dates))
+```
+
+```{r impressions-plot1, echo = FALSE, out.width="50%"}
+ss_2_dates %>% 
+    ggplot(aes(x = impressions, y = sum_units, color = platform))+
+    geom_point()+
+    labs(title = "Units Sold vs. Impressions", 
+         x = "Impressions", 
+         y = "Units Sold")
+
+ss_2_dates %>% 
+    ggplot(aes(x = impressions, y = sum_units, color = platform))+
+    geom_point()+
+    labs(title = "Zooming in on Impressions... ", 
+         x = "Impressions", 
+         y = "Units Sold")+
+    xlim(0, 100000) +
+    ylim(0, 7500)
+```
+
+
+```{r combine-google-ss, include = FALSE, eval = FALSE}
+## DO NOT RUN THIS CHUNK - MANUAL CHANGES HALFWAY THROUGH TO XLSX FILE
+
+google <- readxl::read_excel("google-analytics.xlsx", sheet = "Dataset1") %>% janitor::clean_names()
+
+# filter for just facebook and twitter paidsocial/display ads:
+ga <- google %>% filter(
+    str_detect(google$source_medium, "twitter") == TRUE | 
+    str_detect(google$source_medium, "facebook") == TRUE)
+
+ga <- ga %>% mutate(source_medium = as.factor(source_medium))
+
+
+ga <- ga %>% filter(
+    str_detect(ga$source_medium, "paid") == TRUE |
+    str_detect(ga$source_medium, "ad") == TRUE |
+    str_detect(ga$source_medium, "display") == TRUE |
+    str_detect(ga$source_medium, "paidsocial") == TRUE)
+
+# get rid of sales, catalogs, Ideas, and first word (author name): 
+ga <- ga %>% filter(
+    str_detect(ga$campaign, "sale") == FALSE &
+    str_detect(ga$campaign, "catalog") == FALSE &
+    str_detect(ga$campaign, "Ideas") == FALSE &
+    str_detect(ga$campaign, "Post:") == FALSE &
+    str_detect(ga$campaign, "proposal") == FALSE &
+    str_detect(ga$campaign, "Traffic") == FALSE &
+    str_detect(ga$campaign, "promo") == FALSE &
+    str_detect(ga$campaign, "penrose") == FALSE) 
+
+campaign_list <- ga %>% pull(campaign)
+
+new_campaigns <- c()
+for(campaign in campaign_list){
+    new_campaign <- str_replace(campaign, "-", " ")
+    new_campaign <- str_extract_all(new_campaign, "(?<=[:blank:]).*")
+    new_campaign <- str_replace_all(new_campaign, "-", " ")
+    new_campaigns <- append(new_campaigns, new_campaign)
+}
+new_campaigns
+
+ga$new_campaign <- new_campaigns
+
+ga <- ga %>% arrange(new_campaign) %>% 
+    select(campaign, new_campaign, source_medium, sessions, percent_new_sessions, new_users, bounce_rate, pages_session, avg_session_duration, ecommerce_conversion_rate, transactions, revenue)
+
+
+## make ss_2's titles lowercase:
+ss_2_dates <- ss_2_dates %>% mutate(
+    new_title = tolower(title))
+
+ss_2_dates <- ss_2_dates %>% arrange(new_title)
+
+openxlsx::write.xlsx(ga, "ga_to_sort.xlsx")
+openxlsx::write.xlsx(ss_2_dates, "ss_2_to_sort.xlsx")
+
+
+
+## READ IN MANUAL CORRECTIONS: ##
+ga_sorted <- readxl::read_excel("ga_to_sort.xlsx")
+ss_sorted <- readxl::read_excel("ss_2_to_sort.xlsx")
+
+## add platform to each title so can sort only title-source correctly: 
+# (i.e, title-twitter, title-facebook)
+
+ga_sorted_new <- ga_sorted %>% mutate(
+    source = case_when(
+        str_detect(ga_sorted$source_medium, "twitter") == TRUE ~ "twitter", 
+        str_detect(ga_sorted$source_medium, "facebook") == TRUE ~ "facebook"
+    ))
+
+ga_sorted_new <- ga_sorted_new %>% mutate(
+    new_campaign2 = str_c(ga_sorted_new$new_campaign, ga_sorted_new$source, sep = " ")
+) %>% select(campaign, new_campaign, new_campaign2, source, sessions, percent_new_sessions, new_users, bounce_rate, pages_session, avg_session_duration, transactions, revenue)
+
+ss_sorted_new <- ss_sorted %>% mutate(
+    new_title2 = str_c(ss_sorted$new_title, ss_sorted$platform, sep = " ")
+)
+
+
+# match on new_title2 (ss) ~ new_campaign2 (ga): 
+ss_ga <- full_join(ss_sorted_new, ga_sorted_new, by = c("new_title2" = "new_campaign2"))
+ss_ga <- ss_ga %>% select(title, campaign, new_title, new_campaign, platform, source, 
+                          sum_units, amount_spent, results, impressions, result_rate,
+                          cost_per_result, log_units, sessions, percent_new_sessions, new_users,
+                          bounce_rate, pages_session, avg_session_duration, transactions,
+                          revenue)
+openxlsx::write.xlsx(ss_ga, "ss_ga.xlsx")
+```
+
+
+```{r ss-ga-read-in, include = FALSE}
+
+## FINAL COMBINED GA and SS: 
+ss_ga <- readxl::read_excel("ss_ga.xlsx")
+
+ss_ga_dates <- left_join(ss_ga, ss_small_final, by = "title") %>% 
+    filter(pub_date >= "2020-06-30" & pub_date <= "2021-07-01") 
+```
+
+```{r bounce-rate-units-plot, echo = FALSE, out.width = "50%"}
+ss_ga_dates %>% 
+    ggplot(aes(x = bounce_rate, y = sum_units.x, color = platform))+
+    geom_point()+
+    labs(title = "Units Sold by Bounce Rate of Ad", 
+         x = "Bounce Rate for Ad", 
+         y = "Units Sold")
+```
+
+
+
+## 3. Do ads on one platform generate more sales than ads on the other?
+
+* No, it looks like sales from books with ads on both platforms are about equal.  
+
+
+```{r platform-sales-plot, echo = FALSE, out.width = "70%"}
+
+ss_2_dates %>% 
+    ggplot(aes(x = platform, y = sum_units, color = platform))+
+    geom_jitter()+
+    labs(title = "Units Sold by Platform of the Ad", 
+         y = "Units Sold \n(combining all types)")
+
+```
+
+* Note: Some books had ads on both facebook and twitter. Books with more than one ad had more sales. Of books that had at least one social media ad in the time frame 6/30/2020 - 7/1/2021, books with two or more ads are estimated to have had approximately 1.9 times as many units sold as books with only one ad. The 95% confidence interval for this result is 1.3 to 2.7, indicating it is likely not due to chance. 
+```{r two-or-more-ads, include = FALSE}
+
+# Join pub dates to ss: 
+ss_3 <- left_join(ss, ss_small_final, by = "title") %>% 
+    select(title, sum_units.x, log_units, pub_date, platform, amount_spent,
+           results, impressions, result_rate, cost_per_result, had_ad)
+
+# subset for publication dates in range: 
+
+ss_3 <- ss_3 %>% filter(pub_date >= "2020-06-30" & pub_date <= "2021-07-01")
+
+# Two ad platforms? 
+
+ss_3 <- ss_3 %>% group_by(title) %>% 
+    mutate(n = n(), 
+           two_ads = ifelse(n <= 1, "no", "yes") %>% as.factor())
+
+
+# Of campaigns that had a social media ad, did having more than one help sales? 
+ss_4 <- ss_3 %>% filter(had_ad == "yes") %>% 
+    distinct(title, sum_units.x, log_units, two_ads)
+
+ss_4 <- ss_4 %>% mutate(
+    two_ads = forcats::fct_relevel(two_ads, "yes", "no"))
+
+ # two-sample t-test on the logged units sold: 
+
+ttest_two_ads <- t.test(data = ss_4, 
+                    log_units ~ two_ads,
+                    var.equal = TRUE)
+
+# calculate the multiplier effect: 
+
+    # Find means of ad and no ad: 
+mean_two <- mean(ss_4$log_units[ss_4$two_ads== "yes"], na.rm = TRUE)
+mean_one <- mean(ss_4$log_units[ss_4$two_ads == "no"], na.rm = TRUE)
+
+    # Find diff in means: 
+mean_diff_two_ads <- mean_two - mean_one
+
+    # untransform the difference: 
+multiplier_two_ads <- exp(mean_diff_two_ads)
+
+    # 95% confidence interval of logged values: 
+ttest_two_ads$conf.int
+
+    # confidence interval of multiplier: 
+exp(ttest_two_ads$conf.int)
+
+
+
+```
+
+
+```{r two-or-more-ads-plot, echo= FALSE}
+ss_4 %>% 
+    ggplot(aes(x = two_ads, y = sum_units.x, color = two_ads))+
+    geom_jitter()+
+    geom_boxplot(alpha = 0.25) +
+    labs(title = "Sales for Campaigns with \nOne vs. Two or More Ads", 
+         x = "Two or more Ads?",
+         y = "Units Sold", 
+         color = "Two or \nMore Ads?")
+         
+```
+
+## 4. Sales for books with and without an Ideas post: 
+
+* Procedure:  
+    - This section looks at Ideas posts from June 1 2020 to June 28 2021, with data on the Ideas posts gathered from google analytics for that time frame.   
+    - I scraped those Ideas posts to see if they were about books from the list of books with sales figures from June 30 2020 - July 1 2021 (the sales dataset from Power BI).   
+    - To be fair when comparing sales figures for books that did and did not have an Ideas post about them, I only included books with a publication date between June 30 2020 - July 1 2021. This is because I only wanted to include books that had the chance of having an Ideas post written about them, and the google analytics data in this study only goes back to June 2020. If we think the google analytics data is reliable earlier than June 2020, this study could be extended back in time. 
+
+
+```{r clean-ideas-1, include = FALSE, eval = FALSE}
+# read in ideas with scraped and manually entered types: 
+ideas <- readxl::read_excel("edited-ideas-no-dates-3.xlsx")
+
+# Calculate variables by combining the multiple entries that are the same: 
+
+ideas_full <- ideas %>% group_by(new_pages) %>% # group repeats
+    mutate(sum_pageviews = sum(pageviews, na.rm = TRUE), # total pageviews
+           sum_unique = sum(unique_pageviews, na.rm = TRUE), 
+           
+           total_time = avg_time_on_page * pageviews, 
+           sum_total_time = sum(total_time, na.rm = TRUE), 
+           total_avg_time = sum_total_time / sum_pageviews, # average time on page
+          
+           total_bounce = bounce_rate * pageviews, 
+           sum_total_bounce = sum(total_bounce, na.rm = TRUE), 
+           total_bounce_rate = sum_total_bounce / sum_pageviews, # bounce rate
+           
+           total_exit = percent_exit * pageviews, 
+           sum_total_exit = sum(total_exit, na.rm = TRUE), 
+           total_percent_exit = sum_total_exit /sum_pageviews) %>% # percent exit
+    select(pages, new_pages, type, pageviews, sum_pageviews, unique_pageviews,
+           sum_unique, avg_time_on_page, total_avg_time, bounce_rate, 
+           total_bounce_rate, percent_exit, total_percent_exit)
+
+# remove repeat rows: 
+ideas_full <- ideas_full %>% distinct(new_pages, type, sum_pageviews,
+           sum_unique, total_avg_time,total_bounce_rate, total_percent_exit)
+```
+
+
+```{r scrape-for-book-title, include = FALSE, eval = FALSE}
+
+# create URL list from ideas_essays: 
+list_ideas_urls <- c()
+for(page in ideas_full$new_pages){
+    url_page <- str_c("https://press.princeton.edu/ideas", page)
+    list_ideas_urls <- append(list_ideas_urls, url_page)
+}
+
+# Add url column to ideas df
+ideas_full$url <- list_ideas_urls
+
+# use urls to scrape Ideas page for books in the sales df published June 1 2020 to June 28 2021: 
+# booklist <- ss_small_final %>% 
+#     mutate(pub_date = as.Date(pub_date)) %>% 
+#     filter(pub_date >= "2020-06-01" & pub_date <= "2021-06-28")
+
+
+# create list of book titles in the sales figures: 
+
+books <- ss_small_final %>% pull(title)
+
+# Scrape: if no page comes up, "No Post", if page comes up but no book from list, 
+# NA, if page comes up with book in list, booktitle --> book_post list
+book_post <- c()
+for(url in list_ideas_urls){
+    response <- GET(url)
+    content <- content(response)
+    text <- content %>% html_text(trim = TRUE)
+    error <- str_detect(text, "Sorry, we couldn’t find any Ideas matching your criteria. Try removing filters to broaden your search")
+    booktitle <- content %>% 
+        html_node(xpath = '//*[@id="articleBody"]/div[2]/div/div/span/a[1]/span') %>% html_text()
+    if(error == TRUE){
+        book_post <- append(book_post, "No Post")
+    }else if(booktitle %in% books == TRUE){
+        book_post <- append(book_post, booktitle)
+    }else{
+        book_post <- append(book_post, "NA")
+    }
+}
+ideas_full$book_post <- book_post
+
+
+ideas_full2 <- ideas_full %>% select(new_pages, book_post, type, sum_pageviews, sum_unique, total_avg_time, total_bounce_rate, total_percent_exit, url)
+
+ideas_final <- full_join(ideas_full2, ss_small_final, by = c("book_post" = "title"))
+ideas_final <- ideas_final %>% 
+    select(new_pages, book_post, sum_units, log_units, pub_date, 
+            sum_pageviews, sum_unique, total_avg_time,
+            total_percent_exit, total_bounce_rate, type, url.x, url.y)
+
+openxlsx::write.xlsx(ideas_final, "ideas_with_book_and_sales_pubdates.xlsx")
+```
+
+```{r ideas-1, include = FALSE}
+
+### START HERE FOR IDEAS ##
+
+ideas <- readxl::read_excel("ideas_with_book_and_sales_pubdates.xlsx")
+ 
+
+# add column to say yes-no was there an ideas post: 
+ideas <- ideas %>% mutate(
+    post_yn = case_when(
+        (is.na(new_pages)) ~ "no", 
+        (!is.na(new_pages)) ~ "yes"
+    ) %>% as.factor())
+
+### CHECK THIS WORKED ###
+
+ideas <- ideas %>% mutate(
+    post_yn = forcats::fct_relevel(post_yn, "yes", "no"))
+
+# make pub date a date: 
+
+ideas <- ideas %>% mutate(
+    pub_date = as.Date(pub_date))
+
+# subset publication dates to make fair comparison yes/no Ideas post:
+
+ideas_compare <- ideas %>% filter(pub_date >= "2020-06-30" & pub_date <="2021-07-01") 
+    
+```
+
+```{r plot-ideas-1, echo = FALSE}
+ ideas_compare %>%
+    ggplot(aes(x = pub_date, y = sum_units, color = post_yn))+
+    geom_point()+
+    geom_smooth(method = "lm")+
+    labs(title = "Units Sold for Books With and Without an \n Ideas Post About Them", 
+         x = "Book Publication Date", 
+         y = "Units Sold", 
+         color = "Had an \nIdeas Post?")
+```
+
+
+.  
+
+* The graphs above show that **books that had an Ideas post about them (red) sold more units than books without an Ideas post about them (blue),** for books published between June 30, 2020 and July 1, 2021. It is estimated that they sold **3.12 times** as many units as books without an Ideas post. This effect is likely statistically significant. 
+
+```{r plot-ideas-2, echo = FALSE}
+ ideas_compare %>%  
+    ggplot(aes(x = pub_date, y = sum_units, color = post_yn))+
+    geom_point()+
+    geom_smooth(method = "lm") +
+    ylim(0, 12500)+
+    labs(title = "Zoom in on Graph Above...\n Sales for Ideas vs. No Ideas Post", 
+         x = "Book Publication Date", 
+         y = "Units Sold", 
+         color = "Had an \nIdeas Post?")
+```
+
+```{r ideas-table, echo = FALSE, results = "asis"}
+# Summary stats: 
+ideas_compare %>% 
+    group_by(post_yn) %>% 
+    rename(`Had Ideas Post?` = post_yn) %>% 
+    summarize(`mean units sold`= mean(sum_units, na.rm = TRUE), 
+              `median units sold` = median(sum_units, na.rm = TRUE),
+              Q1 = quantile(sum_units, 0.25, na.rm = TRUE), 
+              Q3= quantile(sum_units, 0.75, na.rm = TRUE)) %>% 
+    kable(caption = "Statistics for Books With and Without an Ideas Post",
+        booktabs = TRUE, 
+        format   = 'latex') %>% 
+    kable_styling(
+        bootstrap_options = "striped", 
+        latex_options="hold_position",
+        full_width = FALSE)
+```
+
+```{r ideas-statistics, include = FALSE}
+
+# two-sample t-test on the logged units sold: 
+
+ttest_log_units_ideas <- t.test(data = ideas_compare, 
+                    log_units ~ post_yn, 
+                    var.equal = TRUE)
+
+# calculate the multiplier effect: 
+
+    # Find means of ad and no ad: 
+mean_post <- mean(ideas_compare$log_units[ideas_compare$post_yn== "yes"], na.rm = TRUE)
+mean_no <- mean(ideas_compare$log_units[ideas_compare$post_yn == "no"], na.rm = TRUE)
+
+    # Find diff in means: 
+mean_diff_units_ideas <- mean_post - mean_no
+
+    # untransform the difference: 
+multiplier_ideas <- exp(mean_diff_units_ideas)
+
+    # 95% confidence interval of logged values: 
+ttest_log_units_ideas$conf.int
+
+    # confidence interval of multiplier: 
+exp(ttest_log_units_ideas$conf.int)
+
+
+## RANK-SUM TEST## 
+
+wilcox.test(log_units ~ post_yn, 
+            conf.int = TRUE, 
+            exact = FALSE, 
+            alternative = "greater", 
+            data = ideas_compare)
+
+# Rank all measurements in increasing order: 
+
+rank_ideas <- rank(ideas_compare$sum_units, ties.method = "average")
+
+# Sum the ranks for all of a particular group. (Sum is the test statistic, T)
+t_ideas <- sum(rank_ideas[ideas_compare$post_yn == "yes"])
+
+# Is this test statistic extreme? 
+    # assume the t-stats (sum of ranks) is normally distributed; build normal dist of t-stats)
+
+ideas_avg_units <- mean(rank_ideas)
+ideas_sd_units <- sd(rank_ideas)
+n_ideas <- nrow(subset(ideas_compare, ideas_compare$post_yn == "yes"))
+mean_t_ideas <- n_ideas * ideas_avg_units
+ideas_sd_t <- ideas_sd_units * sqrt((n_ideas^2)/(2*n_ideas))
+
+# calculate the Z score and p-value:
+z_ideas <- (t_ideas - mean_t_ideas)/ideas_sd_t
+pvalue_ideas<- pnorm(-abs(z_ideas))
+```
+
+**Statistical tests**: 
+It is estimated that the books with an Ideas post have 3.12 times as many sales as books without an Ideas post. The 95% confidence interval for this multiplicative effect is 2.50 to 3.90, indicating that it is unlikely this difference is due to chance. The rank-sum tests confirms this, with a p < 0.001 for the difference in the two groups.  
+
+
+
+* Note: For some books there was more than one Ideas post about the book. It seems that having more posts may associated with more units sold, but this is not conclusive and the effect is small. It is estimated that **books with more than one Ideas post had approximately 1.4 times more units sold** than books with only one Ideas post, with a 95% confidence interval of 0.92 to 2.25 times the units sold. Since this interval covers zero, **it is not conclusive, but only suggestive** that there really is a difference between the two groups.   
+
+```{r multiple-ideas-posts, echo = FALSE, out.width = "70%"}
+
+## It does seem that books that got more than one Ideas post about them
+# had higher sales, but only very slightly. 
+
+multiples <- ideas_compare %>% 
+    filter(post_yn == "yes") %>% 
+    group_by(book_post) %>% 
+    mutate(n = n(), 
+           multiple = ifelse(n > 1, "TRUE", "FALSE") %>% 
+               as.factor())
+
+multiples <- multiples %>% mutate(
+    multiple = forcats::fct_relevel(multiple, "TRUE", "FALSE")
+)
+
+multiples <- multiples %>% distinct(book_post, sum_units, log_units, multiple, n)
+
+
+multiples %>% 
+    ggplot(aes(x = multiple, y = sum_units, color = multiple))+
+    geom_jitter(alpha = 0.75)+
+    geom_boxplot(alpha = 0.25)+
+    labs(title = "Sales for Books with Multiple Ideas Posts", 
+         x = "More than 1 Ideas Post for the Book?", 
+         y = "Units Sold", 
+         color = "More than 1 \nIdeas Post?")
+
+```
+
+```{r mult-stat-tests, include = FALSE}
+
+summary(lm(log_units ~ n, data = multiples))
+# suggestive, but not conclusive evidence that more posts ~ more sales.
+
+wilcox.test(log_units ~ multiple, 
+            conf.int = TRUE, 
+            exact = FALSE, 
+            alternative = "greater", 
+            data = multiples)
+
+# two-sample t-test on the logged units sold: 
+
+ttest_log_units_mult <- t.test(data = multiples, 
+                    log_units ~ multiple, 
+                    var.equal = TRUE)
+
+# calculate the multiplier effect: 
+
+    # Find means of ad and no ad: 
+mean_mult <- mean(multiples$log_units[multiples$multiple== "TRUE"], na.rm = TRUE)
+mean_no_mult <- mean(multiples$log_units[multiples$multiple == "FALSE"], na.rm = TRUE)
+
+    # Find diff in means: 
+mean_diff_mult <- mean_mult - mean_no_mult
+
+    # untransform the difference: 
+multiplier_mult <- exp(mean_diff_mult)
+
+    # 95% confidence interval of logged values: 
+ttest_log_units_mult$conf.int
+
+    # confidence interval of multiplier: 
+exp(ttest_log_units_mult$conf.int)
+
+multiplier_mult
+```
+
+
+
+
+## 5. Is Behavior on an Ideas Post Related to Unit Sales of the Book? 
+* There was no correlation between bounce rate for the Ideas post or average time spent on the page and units sold. 
+* It is possible, but not quite proven here, that there _might_ be a relationship between pageviews and unique pageviews of an Ideas post and the number of units sold. If there is a relationship, though, it is very slight. 
+
+```{r ideas-bounce-rate, echo = FALSE, out.width = "50%"}
+ideas_compare %>% 
+    ggplot(aes(x = total_bounce_rate, y = sum_units))+
+    geom_point()+
+    labs(title = "Units Sold by Ideas Post Bounce Rate", 
+         x = "Bounce Rate", 
+         y = "Units Sold")
+
+ideas_compare %>% 
+    ggplot(aes(x = total_avg_time, y = sum_units))+
+    geom_point()+
+    labs(title = "Units Sold by Ideas Post Average Time on Page", 
+         x = "Average Time on Page", 
+         y = "Units Sold") 
+
+ideas_compare %>% 
+    ggplot(aes(x = total_percent_exit, y = sum_units))+
+    geom_point()+
+    labs(title = "Units Sold by Ideas Post Exit Rate", 
+         x = "Percent Exit", 
+         y = "Units Sold") 
+```
+
+
+As you can see from the plots above, there is no relationship between bounce rate, time on page, and exit rate for an Ideas post and the units sold of the book.    
+
+However, there _may_ be a relationship between pageviews and unique pageviews and units sold, though this is not conclusive and the relationship is slight, as the following plots show: 
+```{r ideas-plots-pageviews, echo = FALSE, out.width = "50%"}
+ideas_compare %>% 
+    ggplot(aes(x = sum_pageviews, y = sum_units))+
+    geom_point()+
+    labs(title = "Units Sold by Ideas Post Pageviews", 
+         x = "Pageviews", 
+         y = "Units Sold") 
+
+ideas_compare %>% 
+    ggplot(aes(x = sum_pageviews, y = sum_units))+
+    geom_point()+
+    labs(title = "Zoom in on Pageviews...", 
+         x = "Pageviews", 
+         y = "Units Sold") + 
+    geom_smooth(method = "lm")+
+    xlim(0, 2000) +
+    ylim(0, 10000)
+
+```
+
+```{r unique-views-ideas, echo = FALSE, out.width = "50%"}
+ideas_compare %>% 
+    ggplot(aes(x = sum_unique, y = sum_units))+
+    geom_point()+
+    labs(title = "Units Sold by Unique Visitors", 
+         x = "Unique Pageviews", 
+         y = "Units Sold")
+
+ideas_compare %>% 
+    ggplot(aes(x = sum_unique, y = sum_units))+
+    geom_point()+
+    labs(title = "Zoom in on Unique views...", 
+         x = "Unique Pageviews", 
+         y = "Units Sold")+
+    geom_smooth(method = "lm")+
+    xlim(0, 2000)+
+    ylim(0, 10000)
+```
+
+
+```{r stat-tests-ideas-behavior, include = FALSE}
+
+summary(lm(total_avg_time ~ sum_units, data = ideas_compare))
+
+summary(lm(total_bounce_rate ~ sum_units, data = ideas_compare))
+
+    # make pageviews a log for stat tests:
+ideas_compare <- ideas_compare %>% mutate(
+    log_sum_pageviews = case_when(
+        sum_pageviews > 0 ~ log(sum_pageviews), 
+        sum_pageviews == 0 ~ 0))
+
+summary(lm(log_sum_pageviews ~ log_units, data = ideas_compare))
+
+    # make unique views a log for stat tests: 
+ideas_compare <- ideas_compare %>% mutate(
+    log_sum_unique = case_when(
+        sum_unique> 0 ~ log(sum_unique), 
+        sum_unique == 0 ~ 0))
+
+summary(lm(log_sum_unique ~ log_units, data = ideas_compare))
+
+cor.test(ideas_compare$log_sum_unique, ideas_compare$log_units, method = "spearman", exact = FALSE)
+
+cor.test(ideas_compare$log_sum_pageviews, ideas_compare$log_units, method = "spearman", exact = FALSE)
+
+```
+
+\newpage
+
+# 6. Conclusion: 
+* For books published between June 2020 and July 2021, those that had a Facebook or Twitter ad run for them, or that had an Ideas post about them, sold more units than books that did not have an ad run. On average, they sold roughly 3 times as many units, all book types combined (paperback, hardback, audio, and ebook).    
+ 
+* However, since the books that were selected to have ads run and to have Ideas posts about them were not selected _at random_, we cannot say the ads or the Ideas posts _caused_ the increase in sales. You may have just chosen really good books that were going to do well anyway to run ads and Ideas posts about!  
+
+* Of books that had a social media ad or an Ideas post, there was no relationship between the analytics performance of the ad or post (bounce rate, click-through-rate, etc.) and the units sold for the book. This probably means that all your ads and Ideas posts are doing similarly well to attract attention to the books, but it may also mean that you chose books to promote that would have done well anyway. For example, if an ad for a book has a really low click-through-rate (or a really high bounce rate) but the sales are high, it could mean that the people who bought the book were going to do so anyway without the ad. On the other hand, because not everyone clicks on ads (they often open new tabs to search for the book they've seen in an ad), the fact that books with an ad or an Ideas post tended to sell more units may indicate that people _were_ inspired to buy the book from the ad or post, but that they did so in a new browser window or some other way un-trackable by google analytics. 
+
+```{r ideas-plus-ad-1, include = FALSE}
+
+ideas_ad <- full_join(ss_3, ideas_compare, by = c("title" = "book_post"))
+
+glimpse(ideas_ad)
+
+ideas_ad <- ideas_ad %>% select(
+    title, post_yn, had_ad, platform, two_ads, sum_units.x, log_units.x, pub_date.x, result_rate, sum_pageviews, log_sum_pageviews, type) %>% 
+    rename(sum_units = sum_units.x, 
+           log_units = log_units.x, 
+           pub_date = pub_date.x)
+```
+ 
+```{r ideas-plus-ad-plots, echo = FALSE}
+# if you have at least one ad, does having an ideas post help? 
+
+ideas_ad %>% filter(had_ad == "yes") %>% 
+    distinct(title, post_yn, log_units, sum_units) %>% 
+    ggplot(aes(x = post_yn, y = sum_units, color = post_yn))+
+    geom_jitter()+
+    geom_boxplot(alpha = 0.2)+
+    labs(title = "For Books with Ads, did having an \nIdeas Post Help Sales?", 
+         x = "Had an Ideas Post?", 
+         y = "Units Sold", 
+         color = "Had Ideas Post?")+
+    ylim(0, 8000)
+
+# if you have two ads, does having an ideas post help? 
+
+ideas_ad %>% filter(two_ads == "yes") %>% 
+    distinct(title, post_yn, log_units, sum_units) %>% 
+    ggplot(aes(x = post_yn, y = sum_units, color = post_yn))+
+    geom_jitter()+
+    geom_boxplot(alpha = 0.2)+
+    labs(title = "For Books with 2 + Ads, \nDid having an Ideas Post help?", 
+         x = "Had an Ideas Post?", 
+         y = "Units Sold", 
+         color = "Had Ideas Post?")+
+    ylim(0, 8000)
+
+```
+ 
+```{r ideas-plus-ads-stats, include = FALSE}
+# Test the difference: for books that had at least one social media ad, 
+    # did having an Ideas post change units sold? 
+
+ad_and_ideas_test <- ideas_ad %>% filter(had_ad == "yes") %>% 
+    distinct(title, post_yn, log_units, sum_units)
+
+# Test the difference: for books with two ore more social media ads, 
+    # did having an Ideas post change the units sold? 
+
+two_ads_and_ideas_test <- ideas_ad %>% filter(two_ads == "yes") %>% 
+    distinct(title, post_yn, log_units, sum_units)
+
+# Case 1: yes, having an ideas post did increase units sold. 
+wilcox.test(log_units ~ post_yn, 
+            conf.int = TRUE, 
+            exact = FALSE, 
+            alternative = "greater", 
+            data = ad_and_ideas_test)
+
+# Case 2: having an ideas post DECREASED the units sold, but not statistically significant. 
+wilcox.test(log_units ~ post_yn, 
+            conf.int = TRUE, 
+            exact = FALSE, 
+            alternative = "greater", 
+            data = two_ads_and_ideas_test)
+
+# What is the multiplicative effect for case 1? 
+mean_yespost <- ideas_ad %>% 
+    filter(had_ad == "yes") %>% 
+    group_by(post_yn) %>% 
+    summarize(mean_sum = mean(log_units, na.rm = TRUE)) %>% 
+    filter(post_yn == "yes") %>% pull(mean_sum)
+
+mean_nopost <- ideas_ad %>% 
+    filter(had_ad == "yes") %>% 
+    group_by(post_yn) %>% 
+    summarize(mean_sum = mean(log_units, na.rm = TRUE)) %>% 
+    filter(post_yn == "no") %>% pull(mean_sum)
+
+mean_diff_posts <- mean_yespost - mean_nopost
+
+multiplier_postad <- exp(mean_diff_posts)
+
+ttest_ad_post <- t.test(data = ideas_ad %>% filter(had_ad == "yes"), 
+                    log_units ~ post_yn, 
+                    var.equal = TRUE)
+exp(ttest_ad_post$conf.int)
+
+    # untransform the difference: 
+multiplier_ad <- exp(mean_diff_units)
+
+    # 95% confidence interval of logged values: 
+ttest_log_units$conf.int
+
+    # confidence interval of multiplier: 
+exp(ttest_log_units$conf.int)
+
+
+```
+
