@@ -1,0 +1,1064 @@
+---
+title: "Asset Types, Click-Through-Rates, and Cost-per-Click"
+author: "Sally Cochrane for Meredith McMahon"
+date: "6/16/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+warning = FALSE
+message = FALSE
+```
+
+```{r library, include = FALSE}
+library(dplyr)
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+library(cowplot)
+```
+
+```{r load-data, include = FALSE, eval = FALSE}
+source_assets <- read_excel("source-medium-ad-content.xlsx", sheet = "Dataset1")
+campaign_assets <- read_excel("campaign-ad-content.xlsx", sheet = "Dataset1")
+campaign_source <- read_excel("campaign-source-medium.xlsx", sheet = "Dataset1")
+
+source_assets <- source_assets %>% janitor::clean_names()
+campaign_assets <- campaign_assets %>% janitor::clean_names()
+campaign_source <- campaign_source %>% janitor::clean_names()
+
+```
+
+```{r clean-source-assets, include = FALSE, eval = FALSE}
+
+# keep only twitter and facebook display/paidsocial:
+source_assets1 <- source_assets %>% 
+    filter(
+        source_medium == "twitter-main / display" | 
+        source_medium == "facebook-main / display" |
+        source_medium ==  "twitter-main / paidsocial" |
+        source_medium ==  "facebook-main / paidsocial")
+
+# label display/paidsocial the same, so can combine in next step:
+source_assets1 <- source_assets1 %>% 
+     mutate(
+        platform = case_when(
+        source_medium == "twitter-main / display" | 
+            source_medium ==  "twitter-main / paidsocial" ~ "twitter", 
+        source_medium == "facebook-main / display" | 
+            source_medium ==  "facebook-main / paidsocial" ~ "facebook") %>% 
+            as.factor(), 
+        asset = as.factor(ad_content)
+    )
+
+
+# combine columns for facebook and twitter for each asset (split up still because were labeled display and paidsocial):
+source_assets2 <- source_assets1 %>% group_by(platform, asset) %>% 
+    mutate(
+    percent_new_sessions2 = mean(percent_new_sessions), 
+    bounce_rate2 = mean(bounce_rate), 
+    pages_session2 = mean(pages_session), 
+    avg_session_duration2 = mean(avg_session_duration), 
+    ecommerce_conversion_rate2 = mean(ecommerce_conversion_rate)
+    ) %>% 
+    select(platform, asset, percent_new_sessions2, bounce_rate2, pages_session2,
+           avg_session_duration2, ecommerce_conversion_rate2)
+
+source_assets2 <- source_assets2 %>%
+    arrange(platform, asset) %>% distinct(platform, asset, percent_new_sessions2, 
+                                          bounce_rate2, pages_session2,
+                                          avg_session_duration2,
+                                          ecommerce_conversion_rate2)
+
+openxlsx::write.xlsx(source_assets2, file = "source_assets2.xlsx")
+
+```
+## Questions:
+
+1. How are the different assets performing on facebook and twitter? 
+2. How are the different assets performing by book genre? 
+3. Does Facebook or Twitter have a higher Click-through Rate (CTR)? 
+4. Does Facebook or Twitter have a higher Cost per Click (CPC)? 
+
+### Biggest takeaway points: 
+
+* Twitter has a higher click-through rate than facebook. The Twitter click-through rate is nearly twice as high as the Facebook CTR (1.8 times). The click-through rate for both is around 1-2 %. 
+
+* However, Twitter has a higher bounce rate than facebook (meaning that a higher percentage of users who click through an ad and land on the website don't do anything else before they leave). So, it's not clear whether Twitter's higher CTR actually reflects increased engagement.
+
+* Links have a lower bounce rate than videos and images overall (considering all genre types), but get fewer new sessions (new users) than videos and images. So, it's possible (but not certain) that fewer people click links, but the ones who do are more engaged. 
+
+* The difference in bounce rate between the asset types is strongest among STEM books (not including Nature) and General Interest books (religion, politics, music, education). Humanities and Nature books show less of a difference in results by asset type. Links bounce less than videos and images in these categories.  
+
+* Facebook likely has a higher cost per click than twitter, but the difference in absolute value seems small to me. The median for both is \$0.22 and \$0.33, respectively. 
+
+
+## 1. Asset types on Facebook and Twitter: 
+
+
+```{r load-data-1, include = FALSE}
+source_assets2 <- read_excel("source_assets2.xlsx")
+```
+
+```{r overall-bounce-plot, echo=FALSE, warning = FALSE, message = FALSE, fig.cap = "These graphs show that the bounce rate for twitter is higher than for facebook, and that the bounce rate for links is the lowest. Bounce rates are the percent of visitors who landed on the page but left without doing anything else."}
+
+
+p1 <- source_assets2 %>% group_by(platform) %>% 
+    summarize(bounce_rate3 = mean(bounce_rate2)) %>% 
+    ggplot(aes(x = platform, y = bounce_rate3))+
+    geom_col()+
+    labs(title = "Bounce Rate by Platform", 
+         y = "Bounce Rate")
+
+p2 <- source_assets2 %>% group_by(asset) %>% 
+  summarize(bounce_rate4 = mean(bounce_rate2)) %>% 
+    ggplot(aes(x = asset, y = bounce_rate4))+
+    geom_col() +
+    labs(title = "Bounce Rate by Asset", 
+         y = "Bounce Rate")
+
+plot_grid(p1, p2, labels = NULL)
+```
+
+
+```{r bounce-rate-by-asset-plot, echo=FALSE, out.width = "50%"}
+
+p3 <- source_assets2 %>% 
+    ggplot(aes(x=asset, y = bounce_rate2, fill = platform))+
+    geom_col(position = "dodge")+
+    labs(title = "Bounce Rate by Asset", 
+         x = "Asset", 
+         y = "Bounce Rate")
+
+p4 <- source_assets2 %>% 
+    ggplot(aes(x = asset, y = percent_new_sessions2, fill = platform))+
+    geom_col(position = "dodge")+
+    labs(title = "Percent New Sessions by Asset", 
+         x = "Asset", 
+         y = "Percent New Sessions")
+
+
+p5 <- source_assets2 %>% 
+    ggplot(aes(x=asset, y = pages_session2, fill = platform))+
+    geom_col(position = "dodge")+
+    labs(title = "Pages per Session by Asset", 
+         x = "Asset", 
+         y = "Pages per Session")
+
+p6 <- source_assets2 %>% 
+    ggplot(aes(x=asset, y = avg_session_duration2, fill = platform))+
+    geom_col(position = "dodge")+
+    labs(title = "Average Session Duration by Asset", 
+         x = "Asset", 
+         y = "Average Session Duration")
+
+p3
+p4
+p5
+p6 
+
+```
+Note how videos on twitter have the highest bounce rate; how links have a lower percent new sessions (meaning fewer sessions are due to new users); and how links on facebook have the highest average session duration (users spend a longer time on the web page after clicking through facebook links).  
+
+
+**Summary**: 
+* Twitter has a higher bounce rate than facebook for all asset types combined. 
+
+*  Links have a lower bounce rate than videos and images, for both platforms.
+     - Videos have an especially high bounce rate on twitter. 
+     - Images on twitter have the second highest bounce rate. 
+
+* Links get fewer new sessions on facebook and twitter than videos and images.  
+     - BUT links may have higher average session durations than images and videos on both platforms. The highest session durations were from links on facebook.
+     
+* This _might_ mean that fewer people click on links than images and videos, but people who do click on links engage more with the page they land on: they are less likely to bounce and more likely to stay longer.
+     - NOTE: I say "might" because it's impossible to tell which assets are generating the most sessions with the data google analytics provides, because google analytics doesn't tell us how many campaigns were of each asset type. If you have a record of that, we could figure out which asset type is getting the most sessions.
+    - Note number 2: It's not possible to test statistical significance of these differences, because google analytics pools all data for each asset, so I don't know the sample sizes.   
+.  
+
+### 2. Asset types by genre group:
+
+(Note: This is not limited to facebook and twitter display/paidsocial ads, because there is no way to select three dimensions on google analytics (i.e., campaign, source/medium, and ad content). All the campaigns here had facebook and instagram paidsocial ads, but the data may reflect images, links, and videos posted on other platforms for those campaigns)
+
+
+
+```{r clean-campaign-assets, include = FALSE, eval = FALSE}
+
+### clean campaign assets: 
+campaign_assets 
+
+# only link, video, and image assets:
+campaign_assets1 <- campaign_assets %>% 
+    filter(ad_content %in% c("link", "video", "image")) %>% 
+    mutate(
+        asset = as.factor(ad_content)
+    ) %>% select(campaign, asset, sessions, percent_new_sessions, bounce_rate, pages_session, avg_session_duration, ecommerce_conversion_rate, revenue)
+  
+# keep only campaigns we know were on facebook and twitter: 
+
+campaign_source1 <- campaign_source %>% filter(
+        source_medium == "twitter-main / display" | 
+        source_medium == "facebook-main / display" |
+        source_medium ==  "twitter-main / paidsocial" |
+        source_medium ==  "facebook-main / paidsocial")
+
+campaign_list <- campaign_source1 %>% pull(campaign)
+
+campaign_assets2 <- campaign_assets1 %>% filter(campaign %in% campaign_list)
+campaign_assets2 %>% arrange(campaign)
+    
+    # read in sheet with genres: 
+social <- read_excel(path = "with_genres_new.xlsx")
+
+    # pull campaigns: 
+
+genres <- social %>% select(genre_new, campaign) %>% 
+    mutate(genre_new = tolower(genre_new))
+
+genres <- genres %>% mutate(
+    genre_group = case_when(
+        genre_new == "anthropology" | genre_new == "ancient world" | 
+            genre_new == "art and architecture" |  genre_new == "history" |
+            genre_new == "philosophy" | genre_new == "sociology" ~ "Humanities", 
+        genre_new == "biology" | genre_new == "economics and finance" | 
+            genre_new == "history of science" | genre_new == "mathematics" |
+            genre_new == "neuroscience and psychology" |
+            genre_new == "physics and astronomy" | genre_new == "science" ~ "STEM",
+        genre_new == "nature" ~ "Nature",
+        genre_new == "education" | genre_new == "literature" |
+            genre_new == "music" | genre_new == "religion" |
+            genre_new == "political science" ~ "General interest",
+        genre_new == "0" ~ NA_character_
+    ) %>% as.factor()
+) 
+  
+# bind genres with campaign_assets: 
+
+campaign_assets3 <- left_join(campaign_assets2, genres, by = "campaign")
+campaign_assets3 <- campaign_assets3 %>% 
+    distinct(campaign, asset, sessions, percent_new_sessions, bounce_rate,
+             pages_session, avg_session_duration, ecommerce_conversion_rate,
+             revenue, genre_new, 
+             genre_group)
+
+campaign_assets3 <- campaign_assets3 %>% arrange(campaign, asset) %>% 
+    select(genre_group, genre_new, campaign, asset, sessions, percent_new_sessions, bounce_rate, pages_session, avg_session_duration, ecommerce_conversion_rate, revenue)
+
+# add genre to thorn classical physics:
+which(campaign_assets3$campaign == "thorne-modern-classical-physics")
+campaign_assets3[199, "genre_new"] <- "physics and astronomy"
+campaign_assets3[199, "genre_group"] <- "STEM"
+campaign_assets3[200, "genre_new"] <- "physics and astronomy"
+campaign_assets3[200, "genre_group"] <- "STEM"
+
+# add genre to ancient world catalog:
+which(campaign_assets3$campaign =="ancient-world-catalog-2021-pdf")
+campaign_assets3[8, "genre_new"] <- "ancient world"
+campaign_assets3[8, "genre_group"] <- "Humanities"
+
+campaign_assets3 <- campaign_assets3 %>% mutate(
+    genre_new = as.factor(genre_new),
+    genre_group = as.factor(genre_group)
+)
+   
+campaign_assets3 
+
+# Save it as an excel to add genres: 
+openxlsx::write.xlsx(campaign_assets3, file = "campaign-assets-with-genres.xlsx")
+
+
+```
+
+```{r read-in-final, include = FALSE}
+campaign_assets_final <- read_excel("campaign-assets-with-genres.xlsx")
+
+# remove Ideas, remainder sale, book proposal grant: 
+ca <-campaign_assets_final %>% mutate(
+    genre_new = as.factor(genre_new), 
+    genre_group = as.factor(genre_group)
+)
+ca <- ca %>% 
+        filter(genre_new != "0") 
+```
+
+```{r shortened-df, include = FALSE}
+stem <- ca %>% filter(genre_group == "STEM")
+summary(lm(bounce_rate ~ asset, data = stem))
+
+hum <- ca %>% filter(genre_group == "Humanities")
+summary(lm(bounce_rate ~ asset, data = hum))
+
+gen <- ca %>% filter(genre_group == "General interest")
+summary(lm(bounce_rate ~ asset, data = gen))
+
+nat <- ca %>% filter(genre_group == "Nature")
+summary(lm(bounce_rate ~ asset, data = nat))
+```
+
+**Bounce Rates**
+
+```{r bounce-rates, echo = FALSE, include = FALSE, out.width="50%"}
+ca %>% 
+    ggplot(aes(x = asset, y = bounce_rate))+
+    geom_boxplot()+
+    labs(title = "Bounce Rate by Asset", 
+         x = "Asset", 
+         y = "Bounce Rate")+
+    ggrepel::geom_text_repel(data = subset(ca, asset == "link" & bounce_rate > 0.9 | asset == "image" & bounce_rate > 0.69), 
+              aes(label = campaign), size = 2.5)
+
+ca %>% 
+    ggplot(aes(x = genre_group, y = bounce_rate))+
+    geom_boxplot()+
+    labs(title = "Bounce Rate by Genre Group", 
+         x = "Genre Group", 
+         y = "Bounce Rate") +
+    ggrepel::geom_text_repel(data = subset(ca, bounce_rate > 0.9), aes(label = campaign), size = 2.5)
+```
+
+```{r bounce-rates-genre, echo = FALSE, out.width = "50%" }
+
+p7 <- ca %>% filter(genre_group == "STEM") %>% 
+    ggplot(aes(x = genre_group, y = bounce_rate, color = asset))+
+    geom_boxplot()+
+    labs(title = "STEM Bounce Rate by Asset", 
+         y = "Bounce Rate")+
+    geom_text(data = subset(stem, asset == "image" & bounce_rate > 0.5 | 
+                                asset == "link" & bounce_rate > 0.75), 
+              aes(label = campaign), size = 2.5) +
+    theme(axis.title.x = element_blank())
+
+p8 <- ca %>% filter(genre_group == "Humanities") %>% 
+    ggplot(aes(x = genre_group, y = bounce_rate, color = asset))+
+    geom_boxplot()+
+    labs(title = "Humanities Bounce Rate by Asset", 
+         y = "Bounce Rate")+
+    ggrepel::geom_text_repel(data = subset(hum, bounce_rate > 0.9), 
+            aes(label = campaign), size = 2.5) +
+    theme(axis.title.x = element_blank())
+
+p9 <- ca %>% filter(genre_group == "General interest") %>% 
+    ggplot(aes(x = genre_group, y = bounce_rate, color = asset))+
+    geom_boxplot()+
+    ggrepel::geom_text_repel(data = subset(gen, asset == "link" & bounce_rate > 0.2),
+              aes(label = campaign), size = 2.5) +
+    labs(title = "General Interest Bounce Rate by Asset", 
+         y = "Bounce Rate")+
+    theme(axis.title.x = element_blank())
+
+p10 <- ca %>% filter(genre_group == "Nature") %>% 
+    ggplot(aes(x = genre_group, y = bounce_rate, color = asset))+
+    geom_boxplot()+
+    labs(title = "Nature Bounce Rate by Asset", 
+         y = "Bounce Rate") +
+    theme(axis.title.x = element_blank())
+
+
+  p7
+  p8
+  p9
+  p10
+  
+```
+Note the high bounce rates of STEM videos (percent of users who land on the page and do nothing before leaving); and the low bounce rates of links, particularly STEM and General interest.
+```{r lm-bounce-rates, include = FALSE}
+summary(lm(bounce_rate ~ genre_group, data = ca))
+summary(lm(bounce_rate ~ asset, data = ca))
+summary(lm(bounce_rate ~ asset * genre_group, data = ca))
+
+
+```
+
+
+.  
+
+**Pages per Session: **  
+
+```{r pages-per-session, include = FALSE, fig.cap = "Note the high number of pages per session for Nature videos (number of different pages the user navigated to on the website)."}
+
+ca %>% 
+    ggplot(aes(x = genre_group, y = pages_session))+
+    geom_boxplot()+
+    labs(title = "Average Pages per Session by Genre Group", 
+         x = "Genre Group", 
+         y = "Average Pages per Session")+
+    ggrepel::geom_text_repel(data = subset(ca, pages_session > 2), 
+                             aes(label = campaign), size = 2.5)
+
+ca %>% 
+    ggplot(aes(x = asset, y = pages_session))+
+    geom_boxplot()+
+    labs(title = "Average Pages per Session by Genre Group and Asset", 
+         x = "Asset", 
+         y = "Average Pages per Session") +
+    ggrepel::geom_text_repel(data = subset(ca, pages_session > 2), 
+                             aes(label = campaign), size = 2.5)
+```
+
+```{r pages-session-genres, echo = FALSE, out.width="50%" }
+
+p11 <- ca %>% filter(genre_group == "STEM") %>% 
+    ggplot(aes(x = genre_group, y = pages_session, color = asset))+
+    geom_boxplot()+
+    labs(title = "STEM: Pages Per Session by Asset", 
+         y = "Pages Per Session")+
+    geom_text(data = subset(stem, pages_session > 1.5),
+              aes(label = campaign), size = 2.5) +
+    theme(axis.title.x = element_blank())
+
+p12 <- ca %>% filter(genre_group == "Humanities") %>% 
+    ggplot(aes(x = genre_group, y = pages_session, color = asset))+
+    geom_boxplot()+
+    ggrepel::geom_text_repel(data = subset(hum, pages_session > 2),
+              aes(label = campaign), size = 2.5) +
+   labs(title = "Humanities: Pages Per Session by Asset", 
+         y = "Pages Per Session")+
+    theme(axis.title.x = element_blank())
+
+p13 <- ca %>% filter(genre_group == "General interest") %>% 
+    ggplot(aes(x = genre_group, y = pages_session, color = asset))+
+    geom_boxplot()+
+    labs(title = "General Interest: Pages Per Session by Asset", 
+         y = "Pages Per Session")+
+    theme(axis.title.x = element_blank())
+
+p14 <- ca %>% filter(genre_group == "Nature") %>% 
+    ggplot(aes(x = genre_group, y = pages_session, color = asset))+
+    geom_boxplot()+
+    labs(title = "Nature: Pages Per Session by Asset", 
+         y = "Pages Per Session")+
+    theme(axis.title.x = element_blank())
+
+p11
+p12 
+p13
+p14
+```
+There is no real difference in pages per session (number of pages the user visited upon landing on the website), except perhaps for Nature videos.
+```{r stat-sig-pages-session, include = FALSE}
+summary(lm(pages_session ~ genre_group, data = ca))
+summary(lm(pages_session ~ asset, data = ca))
+
+summary(lm(pages_session ~ asset, data = stem))
+summary(lm(pages_session ~ asset, data = hum))
+summary(lm(pages_session ~ asset, data = gen))
+summary(lm(pages_session ~ asset, data = nat))
+```
+.  
+
+**Average Session Duration:**  
+ 
+
+
+
+```{r avg-session-duration, include = FALSE, out.width="50%"}
+ca %>% 
+    ggplot(aes(x = genre_group, y = avg_session_duration))+
+    geom_boxplot()+
+    labs(title = "Average Session Duration by Genre Group", 
+         x = "Genre Group", 
+         y = "Average Session Duration") +
+    ggrepel::geom_text_repel(data = subset(ca, avg_session_duration > 120), aes(label = campaign), size = 2.5)
+
+ ca %>% 
+    ggplot(aes(x = asset, y = avg_session_duration))+
+    geom_boxplot()+
+    labs(title = "Average Session Duration by Genre Group and Asset", 
+         x = "Asset", 
+         y = "Average Session Duration")+
+    ggrepel::geom_text_repel(data = subset(ca, avg_session_duration > 120), aes(label = campaign), size = 2.5)
+```
+
+```{r avg-session-duration-genres, echo = FALSE, out.width = "50%"}
+
+p15 <- ca %>% filter(genre_group == "STEM") %>% 
+    ggplot(aes(x = genre_group, y = avg_session_duration, color = asset))+
+    geom_boxplot()+
+    labs(title = "STEM: Average Session Duration by Asset", 
+         y = "Average Session Duration")+
+    geom_text(data = subset(stem, asset == "image" & avg_session_duration > 100 | asset == "link" & avg_session_duration > 75),
+              aes(label = campaign), size = 2.5) +
+    theme(axis.title.x = element_blank())
+
+p16 <- ca %>% filter(genre_group == "Humanities") %>% 
+    ggplot(aes(x = genre_group, y = avg_session_duration, color = asset))+
+    geom_boxplot()+
+    ggrepel::geom_text_repel(data = subset(hum, asset == "image" & avg_session_duration > 110 | asset == "link" & avg_session_duration > 300),aes(label = campaign), size = 2.5) +
+   labs(title = "Humanities: Average Session Duration by Asset", 
+         y = "Average Session Duration")+
+    theme(axis.title.x = element_blank())
+
+p17 <- ca %>% filter(genre_group == "General interest") %>% 
+    ggplot(aes(x = genre_group, y = avg_session_duration, color = asset))+
+    geom_boxplot()+
+    labs(title = "General Interest: Average Session Duration by Asset", 
+         y = "Average Session Duration")+
+    theme(axis.title.x = element_blank())+
+    geom_text(data = subset(gen, avg_session_duration > 200), 
+              aes(label = campaign), size = 2.5)
+
+p18 <- ca %>% filter(genre_group == "Nature") %>% 
+    ggplot(aes(x = genre_group, y = avg_session_duration, color = asset))+
+    geom_boxplot()+
+    labs(title = "Nature: Average Session Duration by Asset", 
+         y = "Average Session Duration")+
+    theme(axis.title.x = element_blank())+
+    geom_text(data = subset(nat, avg_session_duration > 300), 
+              aes(label = campaign), size = 2.5)
+
+p15 
+p16 
+p17 
+p18
+```
+Average session duration is the average number of seconds the user spent on the website after clicking through. The outliers are of interest here, but there are no differences between the groups as a whole.
+```{r stat-sig-avg-session-duration, include = FALSE}
+summary(lm(avg_session_duration ~ genre_group, data = ca))
+summary(lm(avg_session_duration ~ asset, data = ca))
+
+summary(lm(avg_session_duration ~ asset, data = stem))
+summary(lm(avg_session_duration ~ asset, data = hum))
+summary(lm(avg_session_duration ~ asset, data = gen))
+summary(lm(avg_session_duration ~ asset, data = nat))
+```
+
+
+.  
+
+**Percent New Sessions:**  
+. 
+
+
+
+
+```{r percent-new-sessions, include = FALSE, out.width="50%"}
+ca %>% 
+    ggplot(aes(x = genre_group, y = percent_new_sessions))+
+    geom_boxplot()+
+    labs(title = "Percent New Sessions by Genre Group", 
+         x = "Genre Group", 
+         y = "Percent New Sessions")
+
+ca %>% 
+    ggplot(aes(x = asset, y = percent_new_sessions))+
+    geom_boxplot()+
+    labs(title = "Percent New Sessions by Genre Group and Asset", 
+         x = "Asset", 
+         y = "Percent New Sessions")
+
+```
+
+```{r percent-new-sessions-genres, echo = FALSE, out.width = "50%"}
+
+p19 <- ca %>% filter(genre_group == "STEM") %>% 
+    ggplot(aes(x = genre_group, y = percent_new_sessions, color = asset))+
+    geom_boxplot()+
+    labs(title = "STEM: Percent New Sessions by Asset", 
+         y = "Percent New Sessions")+
+    # geom_text(data = subset(stem, asset == "image" & percent_new_sessions > 100 | asset == "link" & percent_new_sessions > 75),
+    #           aes(label = campaign), size = 2.5) +
+    theme(axis.title.x = element_blank())
+
+p20 <- ca %>% filter(genre_group == "Humanities") %>% 
+    ggplot(aes(x = genre_group, y = percent_new_sessions, color = asset))+
+    geom_boxplot()+
+    # ggrepel::geom_text_repel(data = subset(hum, asset == "image" & percent_new_sessions > 110 | asset == "link" & percent_new_sessions > 300),aes(label = campaign), size = 2.5) +
+   labs(title = "Humanities: Percent New Sessions by Asset", 
+         y = "Percent New Sessions")+
+    theme(axis.title.x = element_blank())
+
+p21 <- ca %>% filter(genre_group == "General interest") %>% 
+    ggplot(aes(x = genre_group, y = percent_new_sessions, color = asset))+
+    geom_boxplot()+
+    labs(title = "General Interest: Percent New Sessions by Asset", 
+         y = "Percent New Sessions")+
+    theme(axis.title.x = element_blank())
+    # geom_text(data = subset(gen, percent_new_sessions > 200), 
+    #           aes(label = campaign), size = 2.5)
+
+p22 <- ca %>% filter(genre_group == "Nature") %>% 
+    ggplot(aes(x = genre_group, y = percent_new_sessions, color = asset))+
+    geom_boxplot()+
+    labs(title = "Nature: Percent New Sessions by Asset", 
+         y = "Percent New Sessions")+
+    theme(axis.title.x = element_blank())
+    # geom_text(data = subset(nat, percent_new_sessions > 300), 
+    #           aes(label = campaign), size = 2.5)
+
+p19 
+p20
+p21
+p22 
+
+```
+Note how links seem to generate fewer new sessions (percent of users who are new users), except in the Nature category. This is not statistically significant, but interesting.  
+
+```{r stat-sig-percent-new-sessions, include = FALSE}
+summary(lm(percent_new_sessions ~ genre_group, data = ca))
+summary(lm(percent_new_sessions ~ asset, data = ca))
+
+summary(lm(percent_new_sessions ~ asset, data = stem))
+summary(lm(percent_new_sessions ~ asset, data = hum))
+summary(lm(percent_new_sessions ~ asset, data = gen))
+summary(lm(percent_new_sessions ~ asset, data = nat))
+```
+
+
+
+
+```{r ecommerce, include = FALSE, out.width="50%"}
+ca %>% 
+    ggplot(aes(x = genre_group, y = ecommerce_conversion_rate))+
+    geom_boxplot()+
+    labs(title = "Ecommerce Conversion Rate by Genre Group", 
+         x = "Genre Group", 
+         y = "Ecommerce Conversion Rate")
+
+ca %>% 
+    ggplot(aes(x = asset, y = ecommerce_conversion_rate))+
+    geom_boxplot()+
+    labs(title = "Ecommerce Conversion Rate by Genre Group and Asset", 
+         x = "Asset", 
+         y = "Ecommerce Conversion Rate")
+```
+
+```{r ecommerce-conversion-rate-genres, include = FALSE, out.width="50%"}
+
+ca %>% filter(genre_group == "STEM") %>% 
+    ggplot(aes(x = genre_group, y = ecommerce_conversion_rate, color = asset))+
+    geom_boxplot()+
+    labs(title = "STEM: Ecommerce Conversion Rate by Asset", 
+         y = "Ecommerce Conversion Rate")+
+    # geom_text(data = subset(stem, asset == "image" & ecommerce_conversion_rate > 100 | asset == "link" & ecommerce_conversion_rate > 75),
+    #           aes(label = campaign), size = 2.5) +
+    theme(axis.title.x = element_blank())
+
+ca %>% filter(genre_group == "Humanities") %>% 
+    ggplot(aes(x = genre_group, y = ecommerce_conversion_rate, color = asset))+
+    geom_boxplot()+
+    # ggrepel::geom_text_repel(data = subset(hum, asset == "image" & ecommerce_conversion_rate > 110 | asset == "link" & ecommerce_conversion_rate > 300),aes(label = campaign), size = 2.5) +
+   labs(title = "Humanities: Ecommerce Conversion Rate by Asset", 
+         y = "Ecommerce Conversion Rate")+
+    theme(axis.title.x = element_blank())
+
+ca %>% filter(genre_group == "General interest") %>% 
+    ggplot(aes(x = genre_group, y = ecommerce_conversion_rate, color = asset))+
+    geom_boxplot()+
+    labs(title = "General Interest: Ecommerce Conversion Rate by Asset", 
+         y = "Ecommerce Conversion Rate")+
+    theme(axis.title.x = element_blank())
+    # geom_text(data = subset(gen, ecommerce_conversion_rate > 200), 
+    #           aes(label = campaign), size = 2.5)
+
+ca %>% filter(genre_group == "Nature") %>% 
+    ggplot(aes(x = genre_group, y = ecommerce_conversion_rate, color = asset))+
+    geom_boxplot()+
+    labs(title = "Nature: Ecommerce Conversion Rate by Asset", 
+         y = "Ecommerce Conversion Rate")
+    theme(axis.title.x = element_blank())
+    # geom_text(data = subset(nat, ecommerce_conversion_rate > 300), 
+    #           aes(label = campaign), size = 2.5)
+```
+
+```{r stat-sig-ecommerce-rate, include = FALSE}
+summary(lm(ecommerce_conversion_rate ~ genre_group, data = ca))
+summary(lm(ecommerce_conversion_rate ~ asset, data = ca))
+
+summary(lm(ecommerce_conversion_rate ~ asset, data = stem))
+summary(lm(ecommerce_conversion_rate ~ asset, data = hum))
+summary(lm(ecommerce_conversion_rate ~ asset, data = gen))
+summary(lm(percent_new_sessions ~ asset, data = nat))
+```
+**Summary**:   
+
+
+* Taking all campaigns together, links have a statistically significantly lower bounce rate than images and videos (this confirms what was suspected above).    
+      - The lower bounce rate for links is mostly true for STEM and General interest books, and less so for Humanities and Nature books, where links don't bounce quite as much.   
+      - (STEM assets give statistically significantly different bounce rates: links bounce the least, images next, and videos the most. Links for General interest books also bounce less than the other two asset types).  
+
+* The higher average session duration from links (suspected above) seems like it is due to a few outliers of very long average sessions in links for certain campaigns in the “general interest” group. There’s no evidence of any difference in average session duration between assets in any of the genre groups.
+
+* Links provide fewer new sessions than videos and images, overall. This was mostly true in Humanities and General interest categories than in Nature and STEM, where there was no real difference in new sessions between the assets. 
+
+* There is no real difference in pages per session by book genre or by asset, though it is possible that Nature books may get more pages per session with videos.   
+.
+
+## 3. Click through rate (results rate): 
+
+Twitter has a higher click-through rate than facebook. The mean CTR for twitter is 4.47%, while the mean CTR for facebook is 1.30%. However, this difference in means is likely due to lots of outliers on twitter. Because twitter has so many outliers, a better measure of the difference is the medians: **the median CTR for facebook is 1.05%, while the median CTR for twitter is 2.27%.** 
+
+Since the distributions are so skewed, with many outliers, the log CTR is a better way to measure statistical significance of the difference. Using the log CTR, **it is estimated that the CTR for twitter is 1.81 times greater than for facebook (meaning that facebook has about 55% the CTR as twitter).** The 95% confidence interval for this estimate is 1.21 times to 2.72 times, which, since it does not straddle 1, suggests the two groups' CTRs are significantly different. A permutation test and a Rank-Sum test confirmed that the difference is significant.
+
+**There was no substantial difference in CTR between the genres or grouped genres on twitter or facebook.**   
+. 
+
+
+
+```{r begin-here, include = FALSE}
+tw <- read_excel("final-tw-ad-amanger-with-genres.xlsx") 
+fb <- read_excel("final-fb-ad-manager-with-genres.xlsx")
+
+```
+
+```{r calculate-ctr, include = FALSE}
+
+fb_small <- fb %>% 
+    select(campaign_name, genre, genre_group, results, result_indicator, cost_per_results, cpc_cost_per_link_click_usd, ctr_link_click_through_rate, impressions) %>% 
+    rename(cpc = cpc_cost_per_link_click_usd, 
+           ctr = ctr_link_click_through_rate, 
+           result_type = result_indicator, 
+           cost_per_result = cost_per_results) %>% 
+    mutate(
+           platform = "facebook")
+
+tw_small <- tw %>% 
+    select(campaign_name, genre, genre_group, results, result_type, cost_per_result, result_rate, impressions) %>% 
+    rename(ctr = result_rate) %>% 
+    mutate(cpc = cost_per_result, 
+           ctr = as.numeric(ctr)*100,
+           platform = "twitter")
+        # Note: twitter's results were all link clicks except zaloom indebtedness, which was tweet engagement, so I renamed it ctr. 
+
+
+fb_tw <- rbind(fb_small, tw_small)
+glimpse(fb_tw)
+
+fb_tw <- fb_tw %>% mutate(
+    platform = as.factor(platform)
+)
+
+
+### Final df: ###
+
+fb_tw
+
+```
+
+
+```{r ctr-log-test1, include = FALSE}
+# CTR:
+
+# Make CTR a log:
+fb_tw %>% filter(ctr == 0)
+
+ctr_plot <- fb_tw
+
+str_which(ctr_plot$campaign_name, "thorne modern classical physics set")
+ctr_plot[207, "ctr"] <- 0.001
+ctr_plot %>% filter(ctr == 0)
+
+ctr_plot <- ctr_plot %>% mutate(
+    log_ctr = log(ctr))
+
+# find means of logged values:
+mean_fb <- mean(ctr_plot$log_ctr[ctr_plot$platform == "facebook"], na.rm = TRUE)
+
+mean_tw <- mean(ctr_plot$log_ctr[ctr_plot$platform == "twitter"], na.rm = TRUE)
+
+# find the difference in mean log(ctr): 
+mean_diff_logctr <- mean_tw - mean_fb
+
+# untransform the difference: 
+multiplier <- exp(mean_diff_logctr)
+
+# t-test the log ctr: 
+ttest_log_ctr <- t.test(data = ctr_plot, 
+       log_ctr ~ platform, 
+       var.equal = TRUE)
+
+# 95% confidence interval of logged values: 
+ttest_log_ctr$conf.int
+
+# 95% conf int of the multiplier: 
+exp(ttest_log_ctr$conf.int)
+```
+
+
+```{r ctr-plots-1, echo = FALSE, warning = FALSE, message = FALSE}
+
+fb_tw %>% filter(!is.na(ctr)) %>% 
+ggplot(aes(x = platform, y = ctr))+
+    geom_boxplot()+
+    ggrepel::geom_text_repel(data = subset(fb_tw, ctr > 10), 
+                             aes(label = campaign_name), size = 2.5)+
+    labs(title = "Click Through Rate, Facebook vs. Twitter", 
+         y = "Click Through Rate (%)")+
+    theme(axis.title.x=element_blank())
+
+```
+
+```{r ctr-plots-2, echo = FALSE, warning = FALSE, message = FALSE}
+
+ctr_plot %>% filter(!is.na(ctr)) %>% 
+ggplot(aes(x = platform, y = log_ctr))+
+    geom_boxplot()+
+    ggrepel::geom_text_repel(data = subset(ctr_plot, log_ctr > 2.5| platform == "twitter" & log_ctr < -1.3), 
+                             aes(label = campaign_name), size = 2.5)+
+    labs(title = "Log Click Through Rate, Facebook vs. Twitter", 
+         y = "Log Click Through Rate (%)")+
+    theme(axis.title.x=element_blank())
+
+
+```
+
+
+```{r ctr-genres, include = FALSE, eval = FALSE}
+
+## Plots show genre doesn't matter for CTR: the diff is fb vs twitter.
+ctr_plot %>% 
+    ggplot(aes(x = genre, y = log_ctr, color = platform))+
+    geom_boxplot()+
+    theme(axis.text.x= element_text(angle = -25, hjust = 0, vjust = 0))
+
+# No statistical differences:
+summary(lm(log_ctr ~ genre_group, data = ctr_plot))
+summary(lm(log_ctr ~ genre, data = ctr_plot))
+summary(lm(ctr ~ genre_group, data = fb_tw))
+summary(lm(ctr ~ genre, data = fb_tw))
+```
+
+```{r ctr-genre-group, echo = FALSE}
+ctr_plot %>% 
+    ggplot(aes(x = genre_group, y = ctr, color = platform))+
+    geom_boxplot() +
+    labs(title = "CTR by Genre Group", 
+         y = "Click Through Rate (%)")+
+    theme(axis.title.x=element_blank())+
+    scale_x_discrete(labels = c("General Interest", "Humanities", "Nature", "STEM", "NA"))+
+    geom_text(data = subset(ctr_plot, ctr>10), aes(label = campaign_name), size = 2.5, hjust = 0, vjust = 0)
+    
+    
+```
+
+```{r permutation-test-ctr, eval = FALSE, include = FALSE}
+## permutation test: 
+
+# observed difference in means: 
+diff_ctr <- fb_tw %>% 
+    infer::specify(ctr ~ platform) %>% 
+    infer::calculate(stat = "diff in means", 
+                     order = c("twitter", "facebook"))
+
+# Create a null distribution: 
+ctr_null_dist <- fb_tw %>% 
+    infer::specify(ctr ~ platform) %>% 
+    infer::hypothesize(null = "independence") %>% 
+    infer::generate(reps = 10000, type = "permute") %>% 
+    infer::calculate(stat = "diff in means", 
+                     order = c("twitter", "facebook"))
+
+infer::visualize(ctr_null_dist) +
+    infer::shade_p_value(obs_stat = diff_ctr, direction = "greater")
+
+# calculate one-sided p-value: 
+sum(ctr_null_dist$stat >= diff_ctr) / 10000
+```
+
+```{r rank-sum-test, include=FALSE, eval = FALSE}
+
+rank <- rank(fb_tw$ctr, ties.method="average")
+
+t_tw <- sum(rank[fb_tw$platform == "twitter"])
+
+avg_ctr <- mean(rank)
+sd_ctr <- sd(rank)
+n_tw <- nrow(subset(fb_tw, fb_tw$platform == "twitter"))
+
+mean_t = n_tw * avg_ctr
+sd_t <- sd_ctr * sqrt((n_tw^2)/(2*n_tw))
+
+z_tw <- (t_tw = mean_t)/sd_t
+pvalue_tw <- pnorm(-abs(z_tw))
+
+# or with wilcox rank-sum test: 
+wilcox.test(ctr ~ platform, 
+            conf.int = TRUE, 
+            exact = FALSE, 
+            data = fb_tw)
+```
+
+
+```{r best-performing-ctr, echo=FALSE}
+highest_ctr <- fb_tw %>% arrange(desc(ctr)) %>% select(
+  campaign_name, platform, results, result_type, ctr, impressions) 
+
+# highest CTR:
+highest_ctr <- highest_ctr[1:10, ]  
+
+highest_cpc <- fb_tw %>% arrange(cpc) %>% 
+  select(campaign_name, platform, results, result_type, cpc, impressions)
+
+# highest CPC: 
+highest_cpc <- highest_cpc[1:10, ]
+
+social_new <- read_excel("social_new.xlsx") 
+
+highest_avg_duration <- social_new %>% arrange(desc(avg_session_duration)) %>%
+  select(campaign, source_medium, avg_session_duration, sessions)
+
+# highest avg duration: 
+highest_avg_duration <- highest_avg_duration[1:11, ]
+
+highest_pages_session <- social_new %>% arrange(desc(pages_session)) %>% 
+  select(campaign, source_medium, pages_session, sessions)
+
+highest_pages_session <- highest_pages_session[1:11, ]
+
+# highest new users: 
+
+highest_new_users <- social_new %>% arrange(desc(new_users)) %>% 
+  select(campaign, source_medium, percent_new_sessions, sessions)
+
+highest_new_users <- highest_new_users[1:11, ]
+
+# lowest bounce rate: 
+lowest_bounce <- social_new %>% arrange(bounce_rate) %>% 
+  select(campaign, source_medium, bounce_rate, sessions)
+
+lowest_bounce <- lowest_bounce[1:11, ]
+```
+
+## 4. Cost per Click, Facebook vs. Twitter: 
+
+There are lots of outliers in the twitter group, which throws off the mean CPC. The mean twitter CPC is higher than facebook's (0.60 for twitter, and 0.44 for facebook). However, this is due to the outliers. **The median CPC for facebook is actually higher than the median for twitter (\$0.33 vs. \$0.22).** 
+
+It is estimated that **the cost per click (CPC) for facebook is 1.35 times more than the CPC for twitter.** The 95% confidence interval for this estimate is 0.98 to 1.84 times more, which, since it spans 1, indicates that the two groups' CPC's may be not be different. However, it is suggestive that facebook has a higher CPC than twitter. A permutation test and a rank-sum test also confirm that there is suggestive, but not conclusive (at the 0.05 level) evidence that facebook has a higher CPC than twitter. 
+
+**There is no substantial difference in cost-per-click between the different genres or genre groups on either platform.** 
+
+```{r cpc-plot, echo = FALSE, warning = FALSE}
+fb_tw %>% 
+    ggplot(aes(x = platform, y = cpc))+
+    geom_boxplot()+
+    ggrepel::geom_text_repel(data = subset(fb_tw, cpc > 2.5 | platform == "facebook" & cpc > 1.3), 
+              aes(label = campaign_name), size = 2.5)+ 
+    labs(title = "Cost Per Click, Facebook vs. Twitter", 
+         y = "Cost per Click (in Dollars)")+
+    theme(axis.title.x=element_blank())
+```
+
+```{r cpc-log-plot, include = FALSE, eval = FALSE}
+fb_tw %>% 
+    ggplot(aes(x = platform, y = log(cpc)))+
+    geom_boxplot()
+
+fb_tw %>% group_by(platform) %>% 
+    summarize(mean_cpc = mean(cpc, na.rm = TRUE), 
+              median_cpc = median(cpc, na.rm = TRUE))
+               
+```
+
+```{r log-transform-cpc, include = FALSE}
+
+
+cpc_plot <- fb_tw
+
+cpc_plot <- fb_tw %>% mutate(log_cpc = log(cpc))
+
+cpc_plot %>% filter(cpc == 0)
+
+str_which(cpc_plot$campaign_name, "literature catalog$")
+str_which(cpc_plot$campaign_name, "thorne")
+
+cpc_plot[162, "log_cpc"] <- 0
+cpc_plot[207, "log_cpc"] <- 0
+
+cpc_plot <- cpc_plot %>% filter(!is.na(log_cpc))
+
+cpc_plot %>% select(campaign_name, cpc, log_cpc, platform) %>% print(n = 200)
+
+# t-test with logged cpc: 
+
+ttest_cpc <- t.test(data = cpc_plot, 
+       log_cpc ~ platform, 
+       var.equal = TRUE)
+
+# calculate the multiplier effect: 
+
+mean_tw_cpc <- mean(cpc_plot$log_cpc[cpc_plot$platform == "twitter"])
+mean_fb_cpc <- mean(cpc_plot$log_cpc[cpc_plot$platform == "facebook"])
+
+mean_diff_cpc <- mean_fb_cpc - mean_tw_cpc
+
+cpc_plot <- cpc_plot %>% mutate(
+    platform = forcats::fct_relevel(platform, c("facebook", "twitter"))
+)
+
+    
+multiplier_cpc <- exp(mean_diff_cpc)
+
+# 95% confidence interval of the multiplier: 
+exp(ttest_cpc$conf.int)
+```
+
+```{r permutation-test-cpc, include = FALSE, eval = FALSE}
+diff_cpc <- fb_tw %>% 
+    infer::specify(cpc ~ platform) %>% 
+    infer::calculate(stat = "diff in means", 
+                     order = c("facebook", "twitter"))
+
+cpc_null_dist <- fb_tw %>% 
+    infer::specify(cpc ~ platform) %>% 
+    infer::hypothesize(null = "independence") %>% 
+    infer::generate(reps = 10000, type = "permute") %>% 
+    infer::calculate(stat = "diff in means", 
+                     order = c("facebook", "twitter"))
+
+infer::visualise(cpc_null_dist)+
+    infer::shade_p_value(obs_stat = diff_cpc, direction = "less")
+
+# calculate one-sided p-value: 
+sum(cpc_null_dist$stat <= diff_cpc$stat) / 10000
+
+# p-value = 0.202
+```
+
+```{r rank-sum-cpc, include = FALSE, eval = FALSE}
+wilcox.test(cpc ~ platform, 
+            conf.int = TRUE,
+            exact = NULL, 
+            data = fb_tw)
+
+rank_cpc <- rank(fb_tw$cpc, ties.method = "average")
+
+t_cpc_fb <- sum(rank[fb_tw$platform == "facebook"])
+
+avg_cpc <- mean(rank_cpc)
+sd_cpc <- sd(rank_cpc)
+n_fb <- nrow(subset(fb_tw, fb_tw$platform == "facebook"))
+
+mean_cpc <- n_fb*avg_cpc
+sd_cpc <- sd_cpc*sqrt((n_fb^2)/(2*n_fb))
+
+z_cpc <- (t_cpc_fb - mean_cpc)/sd_cpc
+pvalue_cpc_fb <- pnorm(-abs(z_cpc))
+pvalue_cpc_fb
+
+# one-sided p-value is 0.082
+
+
+```
+
+
+```{r cpc-by-genre-groups, echo = FALSE}
+
+cpc_plot %>% 
+    ggplot(aes(x = genre_group, y = log_cpc, color = platform))+
+    geom_boxplot()+
+    labs(title = "Cost per Click (log) by Genre Group", 
+         y = "Cost per Click (log)")+
+    theme(axis.title.x = element_blank())
+```
+
+```{r cpc-genres-plot, include = FALSE, eval = FALSE}
+
+cpc_plot %>% 
+    ggplot(aes(x = genre, y = log_cpc))+
+    geom_boxplot()
+```
+
+
+
